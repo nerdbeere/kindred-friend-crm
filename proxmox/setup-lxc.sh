@@ -253,6 +253,15 @@ fi
 as_app_user "npm ci --no-audit --no-fund"
 as_app_user "npm run build"
 
+# --- Admin auth + backup prerequisites (BEFORE first service start!) --------
+# systemd reads EnvironmentFile= only when the unit starts, so AUTH_SECRET
+# must exist BEFORE `systemctl enable --now kindred` — otherwise the first
+# boot runs without it and every cookie-signing request (setup wizard,
+# login) fails with a 500 until the next restart. This was the "setup
+# failed" bug on fresh installs.
+bash /opt/kindred/scripts/setup-auth.sh || echo "WARN: setup-auth.sh failed — auth will not work until it is fixed" >&2
+bash /opt/kindred/scripts/install-backup-prereqs.sh || echo "WARN: backup prereqs install failed — run manually later" >&2
+
 cat > /etc/systemd/system/kindred.service <<UNIT_EOF
 [Unit]
 Description=Kindred Friend CRM
@@ -290,16 +299,13 @@ for i in $(seq 1 30); do
 done
 
 # --- Admin auth + setup token + sudoers rule for the wizard/UI -------------
-# Mint AUTH_SECRET (cookie signing key) and the one-time setup token the
-# operator pastes into the first-run wizard. Then install the sudo/sudoers
-# prerequisites that let the unprivileged kindred Next.js process invoke the
-# privileged backup-config helper (used by the wizard's step 2 and
-# /api/admin/backup/enable).
-bash /opt/kindred/scripts/setup-auth.sh >/dev/null 2>&1 || true
-bash /opt/kindred/scripts/install-backup-prereqs.sh || echo "WARN: backup prereqs install failed — run manually later" >&2
+# (setup-auth.sh and install-backup-prereqs.sh already ran BEFORE the first
+# service start — see above. EnvironmentFile is read at start time, so this
+# ordering is what guarantees the running process has AUTH_SECRET.)
 
-# Optional: pre-install restic + backup config so the wizard's step 2 is
-# already done by the time the operator logs in.
+# Optional: pre-install restic + backup config so backups are ready by the
+# time the operator first logs in (they can also enable them later from
+# /admin/backups).
 if [ "${ENABLE_BACKUP:-0}" = "1" ] && [ -n "${BACKUP_S3_ENDPOINT:-}" ] && [ -n "${BACKUP_S3_BUCKET:-}" ] && [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   echo "===> ENABLE_BACKUP=1 + BACKUP_S3_* env vars set: pre-configuring backups ..."
   CFG_TMP=/tmp/.kindred-backup-preconfig.json

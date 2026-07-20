@@ -42,7 +42,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Incorrect password." }, { status: 401 });
   }
 
-  const cookie = await issueSessionCookie();
+  let cookie: Awaited<ReturnType<typeof issueSessionCookie>>;
+  try {
+    cookie = await issueSessionCookie();
+  } catch (e) {
+    // AUTH_SECRET missing — service started before /etc/kindred/auth.env
+    // existed. Nothing is committed by a failed login, so just report it.
+    return NextResponse.json(
+      {
+        error:
+          `Could not sign the session cookie: ${e instanceof Error ? e.message : String(e)} ` +
+          "Fix: run `pct exec <CT_ID> -- systemctl restart kindred` on the Proxmox host, then retry.",
+      },
+      { status: 500 },
+    );
+  }
+
   const response = NextResponse.json({ ok: true });
   response.cookies.set({
     name: cookie.name,

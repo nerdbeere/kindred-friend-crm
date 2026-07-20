@@ -147,8 +147,10 @@ beyond the window.
 
 ## 5. First-run setup wizard
 
-The admin account and backups are configured through a one-time wizard,
-**not** by hand-editing config files. Flow:
+The admin account is created through a one-time wizard, **not** by
+hand-editing config files. Backups are NOT part of the wizard — they're
+enabled afterwards from `/admin/backups` (which shows an inline
+configuration form until backups are set up). Flow:
 
 1. Deploy via `proxmox/setup-lxc.sh` (or the one-liner in README). At the
    end, the installer prints a **one-time setup token** to the console,
@@ -161,29 +163,31 @@ The admin account and backups are configured through a one-time wizard,
 2. Browse to `http://<container-ip>:3000/` — middleware detects no
    `admin_password_hash` in `settings` and redirects you to `/setup`.
 
-3. Wizard step 1: **Create admin password** (12-char min, strength meter).
-4. Wizard step 2 (optional, skippable): **Configure encrypted backups** —
-   endpoint, bucket, prefix, region, access key, secret key, restic repo
-   password (or "generate for me"). Skipping leaves backups unconfigured;
-   you can enable later from `/admin/backups`.
-5. Wizard step 3: **Summary + Finish**. `POST /api/setup` runs:
-   - argon2id-hashes the password and writes `settings.admin_password_hash` (atomic transaction)
-    - if backup fields provided: writes `/etc/kindred/backup.env` + `/etc/kindred/restic.pass` (0640 root:kindred), runs `restic init`, installs the systemd units, enables the timer, kicks off the first backup
+3. The wizard is a single page: **setup token + admin password** (12-char
+   min, strength meter). `POST /api/setup` runs, in failure-atomic order
+   (everything that can throw happens before anything is committed):
+   - argon2id-hashes the password (in memory)
+   - signs the session cookie (in memory — fails loudly with a restart hint if `AUTH_SECRET` is missing)
+   - writes `settings.admin_password_hash`
    - deletes `/etc/kindred/setup-token` (one-time use)
-   - signs and sets the `kindred_admin` session cookie — you're logged in immediately
-6. After completion, `/api/setup` returns `410 Gone` and middleware stops redirecting.
+   - sets the `kindred_admin` session cookie — you're logged in immediately and land on `/admin/backups`
+4. After completion, `/api/setup` returns `410 Gone` and middleware stops redirecting.
 
 > **Security note for the open setup window**: while no admin password
 > exists, `/api/setup` is the only unauthenticated write route. Mitigations:
 > - `X-Setup-Token` header must match `/etc/kindred/setup-token` (default-on; printed on the console by the installer)
 > - Rate-limited to 5 attempts / 15 min / IP
 > - Window auto-closes on first password set
-> - The wizard only ever modifies `admin_password_hash` + `/etc/kindred/*` files; it cannot touch contacts or the feed token
+> - The wizard only ever writes `admin_password_hash`; it cannot touch contacts, the feed token, or backup config
 >
 > **Operational guidance**: complete the wizard within a few minutes of
 > first boot, before exposing the box beyond localhost. If you abandon
 > the deploy, the open window persists — `systemctl stop kindred` until
 > you're ready.
+
+> **Zero-touch variant**: operators who want backups pre-configured at
+> install time can set `ENABLE_BACKUP=1` + `BACKUP_S3_*` / `AWS_*` env vars
+> before running `setup-lxc.sh` — no wizard involvement needed.
 
 ---
 
