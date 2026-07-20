@@ -55,8 +55,9 @@ visudo -cf "$SUDOERS_FILE" >/dev/null || die "visudo check failed for $SUDOERS_F
 
 # Repair permissions on existing config files. Older installers wrote these
 # 0600 root:kindred, which the kindred user CANNOT read — breaking the
-# app's status endpoint and ad-hoc restic runs. They must be group-readable.
-for f in /etc/kindred/backup.env /etc/kindred/restic.pass; do
+# app's status endpoint, ad-hoc restic runs, and the AUTH_SECRET file
+# fallback. They must be group-readable.
+for f in /etc/kindred/backup.env /etc/kindred/restic.pass /etc/kindred/auth.env; do
   if [ -f "$f" ]; then
     chown root:"$KINDRED_USER" "$f"
     chmod 0640 "$f"

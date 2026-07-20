@@ -92,7 +92,7 @@ What we deliberately do **not** do:
 | Setup-window abuse (no admin yet)   | `X-Setup-Token` default-on (random, console-printed, one-time); `POST /api/setup` rate-limited 5/15min/IP; window auto-closes once password is set. |
 | Admin endpoint abuse                | Auth + argon2id + CSRF (SameSite=Lax + `Origin` check on admin POSTs) + arg-validated subprocess calls (no shell interpolation). Restore is a destructive action — UI shows a confirmation modal and the API accepts an optional `confirm: "RESTORE"` field. |
 | Admin password leak                 | argon2id hash in `settings.admin_password_hash`; rate-limited login (5 / 15 min / IP) with lockout alerting to journald.                    |
-| Auth secret leak                    | `AUTH_SECRET` in `/etc/kindred/auth.env` `0600 root:kindred`, never in git; rotatable via script (old cookies invalidated).                 |
+| Auth secret leak                    | `AUTH_SECRET` in `/etc/kindred/auth.env` `0640 root:kindred` (group = service account only; also the app's lazy fallback source), never in git; rotatable via script (old cookies invalidated). |
 | Open `/api/contacts/*` (existing)   | **Known follow-up, not changed in this pass** to avoid breaking Home Assistant and the existing UX. Tracked in §13.                        |
 
 ---
@@ -105,7 +105,7 @@ All secrets live in `/etc/kindred/`. Layout:
 /etc/kindred/
   backup.env          # S3 endpoint, bucket, prefix, retention, AWS creds (0640 root:kindred)
   restic.pass         # 32 random bytes, the AES key envelope password   (0640 root:kindred)
-  auth.env            # AUTH_SECRET for cookie signing                   (0600 root:kindred)
+  auth.env            # AUTH_SECRET for cookie signing                   (0640 root:kindred)
   setup-token         # one-time token for the first-run wizard          (0640 root:kindred), deleted after use
 ```
 

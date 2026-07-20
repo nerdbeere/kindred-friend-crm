@@ -286,7 +286,11 @@ WantedBy=multi-user.target
 UNIT_EOF
 
 systemctl daemon-reload
-systemctl enable --now kindred
+systemctl enable kindred
+# Use restart (not `enable --now`): on a RE-INSTALL the unit is already
+# active, and only a restart makes systemd re-read EnvironmentFile= —
+# otherwise the old process keeps running without AUTH_SECRET.
+systemctl restart kindred
 
 # Wait for the app to come up, then hit the homepage once so the
 # feed token is generated in the database.

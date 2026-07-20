@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { readFileSync } from "fs";
 import { NextRequest } from "next/server";
 
 /**
@@ -13,14 +14,51 @@ import { NextRequest } from "next/server";
 export const SESSION_COOKIE = "kindred_admin";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14; // 14 days
 
+const AUTH_ENV_FILE = process.env.AUTH_ENV_FILE || "/etc/kindred/auth.env";
+
+let cachedSecret: string | null = null;
+
+/**
+ * Resolve the cookie-signing secret. Primary source: AUTH_SECRET env var
+ * (loaded by systemd EnvironmentFile=). Fallback: read /etc/kindred/auth.env
+ * directly — the file is 0640 root:kindred, i.e. readable by the service
+ * account this process runs as.
+ *
+ * Why the fallback exists: systemd reads EnvironmentFile only at unit
+ * start, so any install/update ordering that mints auth.env after the
+ * service is already running would otherwise leave the process without a
+ * secret until the next restart (the fresh-install "setup failed" bug).
+ * Reading the file lazily makes that class of ordering bugs self-healing.
+ */
 function getAuthSecret(): string {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) {
-    throw new Error(
-      "AUTH_SECRET is not set — the systemd unit should load /etc/kindred/auth.env via EnvironmentFile=",
-    );
+  if (cachedSecret) return cachedSecret;
+  const fromEnv = process.env.AUTH_SECRET;
+  if (fromEnv) {
+    cachedSecret = fromEnv;
+    return fromEnv;
   }
-  return secret;
+  try {
+    const txt = readFileSync(AUTH_ENV_FILE, "utf8");
+    for (const line of txt.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq < 0) continue;
+      if (trimmed.slice(0, eq).trim() === "AUTH_SECRET") {
+        const v = trimmed.slice(eq + 1).trim();
+        if (v) {
+          cachedSecret = v;
+          return v;
+        }
+      }
+    }
+  } catch {
+    // fall through to the error below
+  }
+  throw new Error(
+    "AUTH_SECRET is not set and could not be read from /etc/kindred/auth.env — " +
+      "run `pct exec <CT_ID> -- bash /opt/kindred/scripts/setup-auth.sh` and `systemctl restart kindred` inside the CT.",
+  );
 }
 
 /** Build the signed cookie value: `base64url(json).base64url(hmac)`. */
