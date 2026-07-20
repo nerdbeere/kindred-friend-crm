@@ -291,23 +291,12 @@ done
 
 # --- Admin auth + setup token + sudoers rule for the wizard/UI -------------
 # Mint AUTH_SECRET (cookie signing key) and the one-time setup token the
-# operator pastes into the first-run wizard. Also install the sudoers rule
-# that lets the unprivileged kindred user invoke the privileged backup
-# config helper via sudo (used by the wizard's step 2 and /api/admin/backup/enable).
+# operator pastes into the first-run wizard. Then install the sudo/sudoers
+# prerequisites that let the unprivileged kindred Next.js process invoke the
+# privileged backup-config helper (used by the wizard's step 2 and
+# /api/admin/backup/enable).
 bash /opt/kindred/scripts/setup-auth.sh >/dev/null 2>&1 || true
-
-# Sudoers whitelist: lets the kindred Next.js process invoke the privileged
-# backup-config helper. The helper validates its input file (path under
-# /tmp, owned by kindred, JSON schema) before touching /etc/kindred/*.
-# `sudo` is installed above; ensure /etc/sudoers.d exists just in case (it
-# comes with the sudo package on Debian).
-install -d -m 0750 -o root -g root /etc/sudoers.d
-cat > /etc/sudoers.d/kindred-configure-backup <<'SUDOERS'
-kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js
-SUDOERS
-chmod 0440 /etc/sudoers.d/kindred-configure-backup
-chown root:root /etc/sudoers.d/kindred-configure-backup
-visudo -cf /etc/sudoers.d/kindred-configure-backup >/dev/null
+bash /opt/kindred/scripts/install-backup-prereqs.sh || echo "WARN: backup prereqs install failed — run manually later" >&2
 
 # Optional: pre-install restic + backup config so the wizard's step 2 is
 # already done by the time the operator logs in.

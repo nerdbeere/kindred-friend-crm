@@ -75,7 +75,21 @@ export async function applyBackupConfig(input: BackupConfigInput): Promise<Apply
   if (result.error || result.status !== 0) {
     const stderr = (result.stderr || "").trim().slice(0, 400);
     const stdout = (result.stdout || "").trim().slice(0, 400);
-    return { ok: false, error: `helper exited ${result.status}: ${stderr || stdout || result.error?.message || "unknown"}` };
+    const raw = stderr || stdout || result.error?.message || "unknown";
+    // Give actionable guidance for the most common failure: the sudoers
+    // rule for the privileged helper isn't installed (e.g. the CT was
+    // provisioned before the sudoers.d fix).
+    if (/a password is required/i.test(raw) || /no sudoers sources/i.test(raw)) {
+      return {
+        ok: false,
+        error:
+          "The sudoers rule for the backup helper isn't installed on this container. " +
+          "Fix it by running on the Proxmox host: " +
+          "`pct exec <CT_ID> -- bash /opt/kindred/scripts/install-backup-prereqs.sh`, " +
+          "then retry.",
+      };
+    }
+    return { ok: false, error: `helper exited ${result.status}: ${raw}` };
   }
 
   // Helper prints a single JSON line on success: {ok:true, repository, first_backup}

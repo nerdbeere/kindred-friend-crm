@@ -117,10 +117,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: backupErr }, { status: 400 });
   }
 
-  // --- Step 7: configure backups via privileged helper --------------------
-  // Writes /etc/kindred/backup.env + restic.pass + installs systemd units
-  // + sudoers rule + runs first backup, all as root via sudo.
-  let backupApplyResult: { ok: true } | { ok: false; error: string };
+  // --- Step 7: write the admin password hash (atomic) ---------------------
+  // Written BEFORE attempting backup setup so a backup failure never leaves
+  // the operator locked out of the admin account they just created.
+  setSetting("admin_password_hash", hash);
+
+  // --- Step 8: consume the setup token (one-time) -------------------------
+  await consumeSetupToken();
+
+  // --- Step 9: issue session cookie ---------------------------------------
+  const cookie = await issueSessionCookie();
+
+  // --- Step 10: configure backups via privileged helper (non-fatal) -------
+  // The wizard completes regardless of backup outcome. If backups fail, the
+  // operator is logged in and can fix the prerequisite / retry from
+  // /admin/backups (which surfaces the same form).
+  let backupResult: { ok: true; repository?: string } | { ok: false; error: string } = { ok: true };
   if (backups && backups.enabled) {
     const r = await applyBackupConfig({
       endpoint: backups.endpoint,
@@ -131,26 +143,14 @@ export async function POST(request: NextRequest) {
       secret_access_key: backups.secret_access_key,
       restic_password: backups.restic_password,
     });
-    backupApplyResult = r.ok ? { ok: true } : { ok: false, error: r.error };
-    if (!backupApplyResult.ok) {
-      return NextResponse.json({ error: `Backup setup failed: ${backupApplyResult.error}` }, { status: 502 });
+    if (!r.ok) {
+      backupResult = { ok: false, error: r.error };
+    } else {
+      backupResult = { ok: true, repository: r.repository };
     }
-  } else {
-    backupApplyResult = { ok: true };
   }
 
-  // --- Step 8: write the admin password hash (atomic) ---------------------
-  // Done AFTER backup setup so that if backup config fails, the operator
-  // can retry without re-rolling a password (and without the setup window
-  // closing).
-  setSetting("admin_password_hash", hash);
-
-  // --- Step 9: consume the setup token (one-time) -------------------------
-  await consumeSetupToken();
-
-  // --- Step 10: issue session cookie --------------------------------------
-  const cookie = await issueSessionCookie();
-  const response = NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true, backups: backupResult });
   response.cookies.set({
     name: cookie.name,
     value: cookie.value,

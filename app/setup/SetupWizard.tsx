@@ -46,6 +46,7 @@ export default function SetupWizard() {
   const [backup, setBackup] = useState<BackupForm>(EMPTY_BACKUP);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [backupWarning, setBackupWarning] = useState<string | null>(null);
 
   const pwStrength = strength(adminPassword);
   const passwordsMatch = adminPassword === adminPasswordConfirm;
@@ -87,11 +88,19 @@ export default function SetupWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      const data = await res.json().catch(() => ({ error: "Setup failed." }));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: "Setup failed." }));
         throw new Error(data.error || `Setup failed (HTTP ${res.status}).`);
       }
-      // Cookie is set server-side; redirect to /admin/backups (or home if backups skipped).
+      // Setup succeeded (admin account created + logged in). If backup config
+      // failed, surface it as a warning and let the operator continue to
+      // /admin/backups where they can retry after fixing prerequisites.
+      const backupErr = data?.backups && data.backups.ok === false ? data.backups.error : null;
+      if (backupErr) {
+        setBackupWarning(backupErr);
+        setSubmitting(false);
+        return;
+      }
       window.location.href = backup.enabled ? "/admin/backups" : "/admin";
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -251,18 +260,37 @@ export default function SetupWizard() {
             )}
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
+          {backupWarning && (
+            <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-medium">Admin account created, but backup setup failed.</p>
+              <p className="mt-1 whitespace-pre-wrap font-mono text-xs">{backupWarning}</p>
+              <p className="mt-2">
+                You can finish setup and fix backups afterwards from <code>/admin/backups</code>.
+              </p>
+            </div>
+          )}
           <div className="flex justify-between">
             <button type="button" onClick={() => setStep(2)} className="rounded px-4 py-2 text-sm text-stone-600" disabled={submitting}>
               Back
             </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={submitting}
-              className="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {submitting ? "Setting up…" : "Finish setup"}
-            </button>
+            {backupWarning ? (
+              <button
+                type="button"
+                onClick={() => (window.location.href = "/admin/backups")}
+                className="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white"
+              >
+                Continue to backups
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={submitting}
+                className="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {submitting ? "Setting up…" : "Finish setup"}
+              </button>
+            )}
           </div>
         </div>
       )}
