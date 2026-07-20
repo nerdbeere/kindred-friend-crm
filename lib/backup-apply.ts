@@ -83,14 +83,23 @@ export async function applyBackupConfig(input: BackupConfigInput): Promise<Apply
     // rule for the privileged helper isn't installed (e.g. the CT was
     // provisioned before the sudoers.d fix) or is an OLDER rule missing
     // the trailing ` *` wildcard (sudoers matches args exactly without it).
+    // IMPORTANT: always include the raw sudo output too — a canned
+    // message that hides the actual error makes this class of bug
+    // impossible to diagnose when the root cause turns out to be
+    // something else that happens to match the same phrase.
     if (/a password is required/i.test(raw) || /no sudoers sources/i.test(raw)) {
       return {
         ok: false,
         error:
-          "The sudoers rule for the backup helper is missing or outdated on this container. " +
+          "The sudoers rule for the backup helper is missing, outdated, or not matching on this container " +
+          `(raw: "${raw}"). ` +
           "Fix it by running on the Proxmox host: " +
-          "`pct exec <CT_ID> -- bash /opt/kindred/scripts/install-backup-prereqs.sh` " +
-          "(update first: `pct exec <CT_ID> -- bash /opt/kindred/scripts/update.sh`), then retry.",
+          "`pct exec <CT_ID> -- bash /opt/kindred/scripts/update.sh` " +
+          "and check its output for errors — if it fails partway (git pull / npm ci / npm run build), the " +
+          "sudoers repair step never runs. If update.sh completes cleanly and this still happens, run " +
+          "`pct exec <CT_ID> -- cat /etc/sudoers.d/kindred-configure-backup` and " +
+          "`pct exec <CT_ID> -- su -s /bin/bash kindred -c \"sudo -n /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js /tmp/x.json\"` " +
+          "to see the exact failure.",
       };
     }
     return { ok: false, error: `helper exited ${result.status}: ${raw}` };
