@@ -86,9 +86,9 @@ chmod 0600 "$DEV_DIR/backup.env" "$DEV_DIR/restic.pass"
 # --- Seed DB ----------------------------------------------------------------
 log "Seeding test DB ..."
 sqlite3 "$DEV_DIR/data/kindred.db" <<'SQL'
-CREATE TABLE contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, birth_month INTEGER NOT NULL, birth_day INTEGER NOT NULL, birth_year INTEGER, notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT NOT NULL, last_name TEXT NOT NULL DEFAULT '', birth_month INTEGER NOT NULL, birth_day INTEGER NOT NULL, birth_year INTEGER, notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-INSERT INTO contacts (name, birth_month, birth_day, birth_year, notes) VALUES ('Ada Lovelace', 12, 10, 1815, 'mathematician'), ('Alan Turing', 6, 23, 1912, 'computer scientist'), ('Grace Hopper', 12, 9, 1906, 'compiler pioneer');
+INSERT INTO contacts (first_name, last_name, birth_month, birth_day, birth_year, notes) VALUES ('Ada', 'Lovelace', 12, 10, 1815, 'mathematician'), ('Alan', 'Turing', 6, 23, 1912, 'computer scientist'), ('Grace', 'Hopper', 12, 9, 1906, 'compiler pioneer');
 INSERT INTO settings (key, value) VALUES ('feed_token', 'dev-restore-test-token');
 SQL
 SRC_SHA="$(sha256sum "$DEV_DIR/data/kindred.db" | awk '{print $1}')"
@@ -138,7 +138,7 @@ if [ "$SRC_SHA" = "$DST_SHA" ]; then
   PASS=1
 else
   warn "SHAs differ — verifying row-level equality ..."
-  ROW_DIFF="$(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT name FROM contacts ORDER BY id;" | diff - <(printf 'Ada Lovelace\nAlan Turing\nGrace Hopper\n') | wc -l | tr -d '[:space:]')"
+  ROW_DIFF="$(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT first_name || ' ' || last_name FROM contacts ORDER BY id;" | diff - <(printf 'Ada Lovelace\nAlan Turing\nGrace Hopper\n') | wc -l | tr -d '[:space:]')"
   TOKEN="$(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT value FROM settings WHERE key='feed_token';")"
   if [ "$ROW_DIFF" = "0" ] && [ "$TOKEN" = "dev-restore-test-token" ]; then
     log "Row-level + token verification passed."

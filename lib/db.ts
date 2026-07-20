@@ -5,6 +5,45 @@ import { dirname, join } from "path";
 
 const globalForDb = globalThis as unknown as { db?: Database.Database };
 
+/**
+ * One-time migration from the old single `name` column to separate
+ * `first_name` / `last_name` columns. No-op on fresh installs (which are
+ * created with the new columns directly) and on databases that have
+ * already been migrated.
+ */
+function migrateNameColumn(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(contacts)").all() as {
+    name: string;
+  }[];
+  const hasOldName = columns.some((c) => c.name === "name");
+  if (!hasOldName) return;
+
+  const hasNewNames = columns.some((c) => c.name === "first_name");
+  if (!hasNewNames) {
+    db.exec("ALTER TABLE contacts ADD COLUMN first_name TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE contacts ADD COLUMN last_name TEXT NOT NULL DEFAULT ''");
+  }
+
+  const rows = db
+    .prepare("SELECT id, name FROM contacts")
+    .all() as { id: number; name: string }[];
+  const update = db.prepare(
+    "UPDATE contacts SET first_name = ?, last_name = ? WHERE id = ?",
+  );
+  const migrateRows = db.transaction(() => {
+    for (const row of rows) {
+      const trimmed = (row.name ?? "").trim();
+      const spaceIdx = trimmed.indexOf(" ");
+      const first = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
+      const last = spaceIdx === -1 ? "" : trimmed.slice(spaceIdx + 1).trim();
+      update.run(first || "Unknown", last, row.id);
+    }
+  });
+  migrateRows();
+
+  db.exec("ALTER TABLE contacts DROP COLUMN name");
+}
+
 export function getDb(): Database.Database {
   if (!globalForDb.db) {
     const dbPath =
@@ -16,7 +55,8 @@ export function getDb(): Database.Database {
     db.exec(`
       CREATE TABLE IF NOT EXISTS contacts (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        name        TEXT    NOT NULL,
+        first_name  TEXT    NOT NULL,
+        last_name   TEXT    NOT NULL DEFAULT '',
         birth_month INTEGER NOT NULL,
         birth_day   INTEGER NOT NULL,
         birth_year  INTEGER,
@@ -28,6 +68,7 @@ export function getDb(): Database.Database {
         value TEXT NOT NULL
       );
     `);
+    migrateNameColumn(db);
     globalForDb.db = db;
   }
   return globalForDb.db;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Card, Field, Input } from "@/app/components/ui";
 
 /**
  * Inline "enable backups" form shown on /admin/backups when backups aren't
@@ -54,50 +55,40 @@ export default function EnableBackupsForm({ onEnabled }: { onEnabled: () => void
     }
   }
 
-  const inputCls =
-    "w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none disabled:opacity-50";
-  const labelCls = "block text-xs font-medium text-stone-500";
-
   return (
-    <div className="mt-4 rounded-lg border border-stone-200 bg-white p-5">
-      <p className="text-sm text-stone-600">
+    <Card className="mt-4">
+      <p className="text-sm text-night/65">
         Backups aren't configured yet. Point Kindred at an S3-compatible bucket — snapshots are
         encrypted client-side (AES-256 via restic) before they leave this container.
       </p>
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <label className={labelCls}>S3 endpoint (https://…)</label>
-          <input className={inputCls} value={endpoint} onChange={(e) => setEndpoint(e.target.value)} disabled={busy} placeholder="https://s3.eu-central-1.amazonaws.com" />
-        </div>
-        <div>
-          <label className={labelCls}>Bucket</label>
-          <input className={inputCls} value={bucket} onChange={(e) => setBucket(e.target.value)} disabled={busy} placeholder="kindred-backups" />
-        </div>
-        <div>
-          <label className={labelCls}>Prefix (path inside bucket)</label>
-          <input className={inputCls} value={prefix} onChange={(e) => setPrefix(e.target.value)} disabled={busy} />
-        </div>
-        <div>
-          <label className={labelCls}>Region (optional)</label>
-          <input className={inputCls} value={region} onChange={(e) => setRegion(e.target.value)} disabled={busy} placeholder="eu-central-1" />
-        </div>
+        <Field label="S3 endpoint (https://…)" className="sm:col-span-2">
+          <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} disabled={busy} placeholder="https://s3.eu-central-1.amazonaws.com" />
+        </Field>
+        <Field label="Bucket">
+          <Input value={bucket} onChange={(e) => setBucket(e.target.value)} disabled={busy} placeholder="kindred-backups" />
+        </Field>
+        <Field label="Prefix (path inside bucket)">
+          <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} disabled={busy} />
+        </Field>
+        <Field label="Region (optional)">
+          <Input value={region} onChange={(e) => setRegion(e.target.value)} disabled={busy} placeholder="eu-central-1" />
+        </Field>
         <div className="hidden sm:block" />
-        <div>
-          <label className={labelCls}>Access key ID</label>
-          <input className={inputCls} value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} disabled={busy} autoComplete="off" />
-        </div>
-        <div>
-          <label className={labelCls}>Secret access key</label>
-          <input className={inputCls} type="password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} disabled={busy} autoComplete="new-password" />
-        </div>
+        <Field label="Access key ID">
+          <Input value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} disabled={busy} autoComplete="off" />
+        </Field>
+        <Field label="Secret access key">
+          <Input type="password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} disabled={busy} autoComplete="new-password" />
+        </Field>
         <div className="sm:col-span-2">
-          <label className="flex items-center gap-2 text-sm text-stone-700">
+          <label className="flex items-center gap-2 text-sm text-night/75">
             <input type="checkbox" checked={generatePassword} onChange={(e) => setGeneratePassword(e.target.checked)} disabled={busy} />
             Generate a restic repository password for me (stored in <code>/etc/kindred/restic.pass</code>)
           </label>
           {!generatePassword && (
-            <input
-              className={`${inputCls} mt-2`}
+            <Input
+              className="mt-2"
               type="password"
               value={resticPassword}
               onChange={(e) => setResticPassword(e.target.value)}
@@ -108,17 +99,12 @@ export default function EnableBackupsForm({ onEnabled }: { onEnabled: () => void
           )}
         </div>
       </div>
-      {error && <p className="mt-3 whitespace-pre-wrap text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 whitespace-pre-wrap text-sm font-medium text-red-700">{error}</p>}
       <div className="mt-4">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!valid || busy}
-          className="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <Button type="button" onClick={submit} disabled={!valid || busy}>
           {busy ? "Enabling…" : "Enable backups"}
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }

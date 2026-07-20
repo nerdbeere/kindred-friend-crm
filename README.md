@@ -4,7 +4,7 @@ A minimal self-hosted friend/relationship CRM. Keep a list of people and their
 birthdays; Kindred exposes one ICS calendar feed you can subscribe to from
 Home Assistant (or any calendar app) so you never miss a birthday.
 
-- **Contacts**: name, birthday (year optional), freeform notes
+- **Contacts**: first + last name, birthday (year optional), freeform notes
 - **Web UI**: list / add / edit / delete, sorted by upcoming birthday
 - **ICS feed**: `GET /api/feed/<token>.ics` — one all-day, yearly-recurring
   event per contact, regenerated live from the database on every request
@@ -181,8 +181,11 @@ npm run print:feed-token
 
 ```
 app/
-  page.tsx                       # server: loads sorted contacts + feed token
-  ContactsClient.tsx             # client UI: add/edit/delete, list, copy URL
+  page.tsx                       # dashboard: upcoming birthdays overview
+  contacts/
+    page.tsx                      # server: loads sorted contacts
+    ContactsClient.tsx            # client UI: search, sort, add/edit/delete
+  components/ui.tsx               # shared design-system primitives
   api/contacts/route.ts          # GET (list), POST (create)
   api/contacts/[id]/route.ts    # PUT, DELETE
   api/feed/[token]/route.ts     # ICS feed (token-gated, .ics suffix stripped)

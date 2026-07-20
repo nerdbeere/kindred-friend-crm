@@ -6,7 +6,8 @@ import { useState } from "react";
 import SpiritMark from "./SpiritMark";
 
 const links = [
-  { href: "/", label: "Contacts" },
+  { href: "/", label: "Dashboard" },
+  { href: "/contacts", label: "Contacts" },
   { href: "/api-docs", label: "Agent API" },
   { href: "/admin", label: "Admin" },
 ];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Badge, Button, Card } from "@/app/components/ui";
 import ConfirmModal from "./ConfirmModal";
 import EnableBackupsForm from "./EnableBackupsForm";
 
@@ -97,23 +98,23 @@ function isRelevant(job: JobState | undefined | null): boolean {
 
 function StatusBadge({ status }: { status: string | null | undefined }) {
   const s = status || "unknown";
-  const cls =
+  const tone =
     s === "ok"
-      ? "bg-green-100 text-green-800"
+      ? "success"
       : s === "error" || s === "failed"
-        ? "bg-red-100 text-red-800"
+        ? "danger"
         : s === "warn"
-          ? "bg-amber-100 text-amber-800"
-          : "bg-stone-100 text-stone-700";
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{s}</span>;
+          ? "warning"
+          : "neutral";
+  return <Badge tone={tone}>{s}</Badge>;
 }
 
 function JobBadge({ job }: { job: JobState }) {
   if (job.state === "running") {
-    return <span className="inline-block animate-pulse rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">running{job.phase ? ` · ${job.phase}` : ""}</span>;
+    return <Badge tone="info" className="animate-pulse">running{job.phase ? ` · ${job.phase}` : ""}</Badge>;
   }
   if (job.state === "restarting") {
-    return <span className="inline-block animate-pulse rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">service restarting…</span>;
+    return <Badge tone="warning" className="animate-pulse">service restarting…</Badge>;
   }
   return <StatusBadge status={job.state === "idle" ? null : job.state} />;
 }
@@ -285,7 +286,7 @@ export default function BackupsClient() {
   /* -------------------------------------------------------------- render */
 
   if (loading) {
-    return <p className="mt-4 text-sm text-stone-500">Loading…</p>;
+    return <p className="mt-4 text-sm text-night/55">Loading…</p>;
   }
 
   if (!status?.configured) {
@@ -299,14 +300,14 @@ export default function BackupsClient() {
     <div className="mt-4 space-y-6">
       {/* ---------------------------------------------------- status cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <section className="rounded-lg border border-stone-200 bg-white p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Repository</h3>
-          <p className="mt-2 break-all font-mono text-xs text-stone-800">{status.repository ?? "—"}</p>
+        <Card className="p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-night/50">Repository</h3>
+          <p className="mt-2 break-all font-mono text-xs text-night/80">{status.repository ?? "—"}</p>
           <dl className="mt-3 space-y-1 text-sm">
-            <div className="flex justify-between"><dt className="text-stone-500">Schedule</dt><dd>{status.schedule ?? "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-stone-500">Next run</dt><dd title={fmtTs(status.next_run)}>{fmtTs(status.next_run)}</dd></div>
+            <div className="flex justify-between"><dt className="text-night/50">Schedule</dt><dd>{status.schedule ?? "—"}</dd></div>
+            <div className="flex justify-between"><dt className="text-night/50">Next run</dt><dd title={fmtTs(status.next_run)}>{fmtTs(status.next_run)}</dd></div>
             <div className="flex justify-between">
-              <dt className="text-stone-500">Retention</dt>
+              <dt className="text-night/50">Retention</dt>
               <dd title="All snapshots within the window are kept; daily/weekly/monthly thinning applies beyond it">
                 {status.retention
                   ? `${status.retention.keep_within_hours && status.retention.keep_within_hours !== "0" ? `${status.retention.keep_within_hours}h window + ` : ""}${status.retention.keep_daily}d / ${status.retention.keep_weekly}w / ${status.retention.keep_monthly}m`
@@ -314,75 +315,65 @@ export default function BackupsClient() {
               </dd>
             </div>
           </dl>
-        </section>
+        </Card>
 
-        <section className="rounded-lg border border-stone-200 bg-white p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Last backup</h3>
+        <Card className="p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-night/50">Last backup</h3>
           {lb ? (
             <>
-              <p className="mt-2"><StatusBadge status={lb.status} /> <span className="ml-1 text-sm text-stone-600">{timeAgo(lb.ts)}</span></p>
+              <p className="mt-2"><StatusBadge status={lb.status} /> <span className="ml-1 text-sm text-night/60">{timeAgo(lb.ts)}</span></p>
               <dl className="mt-2 space-y-1 text-sm">
-                <div className="flex justify-between"><dt className="text-stone-500">Time</dt><dd>{fmtTs(lb.ts)}</dd></div>
-                <div className="flex justify-between"><dt className="text-stone-500">Duration</dt><dd>{lb.duration_s != null ? `${lb.duration_s}s` : "—"}</dd></div>
-                <div className="flex justify-between"><dt className="text-stone-500">DB size</dt><dd>{fmtBytes(lb.size_bytes)}</dd></div>
+                <div className="flex justify-between"><dt className="text-night/50">Time</dt><dd>{fmtTs(lb.ts)}</dd></div>
+                <div className="flex justify-between"><dt className="text-night/50">Duration</dt><dd>{lb.duration_s != null ? `${lb.duration_s}s` : "—"}</dd></div>
+                <div className="flex justify-between"><dt className="text-night/50">DB size</dt><dd>{fmtBytes(lb.size_bytes)}</dd></div>
                 {lb.snapshot_id && (
-                  <div className="flex justify-between"><dt className="text-stone-500">Snapshot</dt><dd className="font-mono text-xs">{lb.snapshot_id.slice(0, 8)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-night/50">Snapshot</dt><dd className="font-mono text-xs">{lb.snapshot_id.slice(0, 8)}</dd></div>
                 )}
               </dl>
-              {lb.error && <p className="mt-2 text-xs text-red-600">{lb.error}</p>}
+              {lb.error && <p className="mt-2 text-xs text-red-700">{lb.error}</p>}
             </>
           ) : (
-            <p className="mt-2 text-sm text-stone-500">No backup has run yet.</p>
+            <p className="mt-2 text-sm text-night/55">No backup has run yet.</p>
           )}
-        </section>
+        </Card>
 
-        <section className="rounded-lg border border-stone-200 bg-white p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Storage</h3>
+        <Card className="p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-night/50">Storage</h3>
           <dl className="mt-2 space-y-1 text-sm">
-            <div className="flex justify-between"><dt className="text-stone-500">Repository size</dt><dd>{fmtBytes(status.repo_size_bytes)}</dd></div>
-            <div className="flex justify-between"><dt className="text-stone-500">Files backed up</dt><dd>{status.file_count ?? "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-stone-500">Snapshots kept</dt><dd>{status.snapshots ?? 0}</dd></div>
+            <div className="flex justify-between"><dt className="text-night/50">Repository size</dt><dd>{fmtBytes(status.repo_size_bytes)}</dd></div>
+            <div className="flex justify-between"><dt className="text-night/50">Files backed up</dt><dd>{status.file_count ?? "—"}</dd></div>
+            <div className="flex justify-between"><dt className="text-night/50">Snapshots kept</dt><dd>{status.snapshots ?? 0}</dd></div>
           </dl>
-        </section>
+        </Card>
       </div>
 
       {/* -------------------------------------------------------- actions */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => startSimpleJob("backup")}
-          disabled={isActive(jobs.backup)}
-          className="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
+        <Button type="button" onClick={() => startSimpleJob("backup")} disabled={isActive(jobs.backup)}>
           {isActive(jobs.backup) ? "Backing up…" : "Back up now"}
-        </button>
-        <button
-          type="button"
-          onClick={() => startSimpleJob("check")}
-          disabled={isActive(jobs.check)}
-          className="rounded border border-stone-300 px-4 py-2 text-sm text-stone-700 disabled:opacity-50"
-        >
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => startSimpleJob("check")} disabled={isActive(jobs.check)}>
           {isActive(jobs.check) ? "Checking…" : "Check integrity"}
-        </button>
-        <button type="button" onClick={() => void refresh()} className="rounded border border-stone-300 px-4 py-2 text-sm text-stone-700">
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => void refresh()}>
           Refresh
-        </button>
+        </Button>
         {isRelevant(jobs.backup) && !isActive(jobs.backup) && <JobBadge job={jobs.backup} />}
         {isRelevant(jobs.check) && !isActive(jobs.check) && <JobBadge job={jobs.check} />}
       </div>
 
-      {message && <p className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">{message}</p>}
-      {error && <p className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {message && <Alert tone="success">{message}</Alert>}
+      {error && <Alert tone="danger">{error}</Alert>}
 
       {/* ------------------------------------------------- restore banner */}
       {isRelevant(jobs.restore) && (
-        <section className={`rounded-lg border p-4 ${jobs.restore.state === "error" ? "border-red-200 bg-red-50" : isActive(jobs.restore) ? "border-amber-200 bg-amber-50" : "border-green-200 bg-green-50"}`}>
+        <Card className={jobs.restore.state === "error" ? "border-red-200 bg-red-50" : isActive(jobs.restore) ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-stone-900">Restore</h3>
+            <h3 className="text-sm font-bold text-night">Restore</h3>
             <JobBadge job={jobs.restore} />
           </div>
           {jobs.restore.state === "restarting" && (
-            <p className="mt-1 text-sm text-stone-600">
+            <p className="mt-1 text-sm text-night/60">
               The database has been swapped and the service is restarting — this page may fail to load for a few seconds. It will recover on its own.
             </p>
           )}
@@ -390,56 +381,56 @@ export default function BackupsClient() {
           {logs.restore && (
             <pre
               ref={(el) => { logRefs.current.restore = el; }}
-              className="mt-2 max-h-48 overflow-auto rounded bg-stone-900 p-3 font-mono text-xs text-stone-100"
+              className="mt-2 max-h-48 overflow-auto rounded-lg bg-night-shadow p-3 font-mono text-xs text-paper"
             >
               {logs.restore}
             </pre>
           )}
-        </section>
+        </Card>
       )}
 
       {/* ------------------------------------------------- backup log tail */}
       {isRelevant(jobs.backup) && (isActive(jobs.backup) || logs.backup) && (
-        <section className="rounded-lg border border-stone-200 bg-white p-4">
+        <Card>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-stone-900">Backup log</h3>
+            <h3 className="text-sm font-bold text-night">Backup log</h3>
             <JobBadge job={jobs.backup} />
           </div>
           <pre
             ref={(el) => { logRefs.current.backup = el; }}
-            className="mt-2 max-h-56 overflow-auto rounded bg-stone-900 p-3 font-mono text-xs text-stone-100"
+            className="mt-2 max-h-56 overflow-auto rounded-lg bg-night-shadow p-3 font-mono text-xs text-paper"
           >
             {logs.backup || "Starting…"}
           </pre>
-        </section>
+        </Card>
       )}
 
       {/* -------------------------------------------------- check log tail */}
       {isRelevant(jobs.check) && (isActive(jobs.check) || logs.check) && (
-        <section className="rounded-lg border border-stone-200 bg-white p-4">
+        <Card>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-stone-900">Integrity check log</h3>
+            <h3 className="text-sm font-bold text-night">Integrity check log</h3>
             <JobBadge job={jobs.check} />
           </div>
           <pre
             ref={(el) => { logRefs.current.check = el; }}
-            className="mt-2 max-h-56 overflow-auto rounded bg-stone-900 p-3 font-mono text-xs text-stone-100"
+            className="mt-2 max-h-56 overflow-auto rounded-lg bg-night-shadow p-3 font-mono text-xs text-paper"
           >
             {logs.check || "Starting…"}
           </pre>
-        </section>
+        </Card>
       )}
 
       {/* -------------------------------------------------------- snapshots */}
-      <section className="rounded-lg border border-stone-200 bg-white p-5">
-        <h3 className="text-sm font-semibold text-stone-900">Snapshots</h3>
+      <Card>
+        <h3 className="text-sm font-bold text-night">Snapshots</h3>
         {sorted.length === 0 ? (
-          <p className="mt-2 text-sm text-stone-500">No snapshots yet. Click “Back up now”.</p>
+          <p className="mt-2 text-sm text-night/55">No snapshots yet. Click "Back up now".</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-stone-500 [&>th]:pb-2 [&>th]:font-medium">
+                <tr className="text-left text-xs text-night/50 [&>th]:pb-2 [&>th]:font-semibold">
                   <th>Snapshot</th>
                   <th>Time</th>
                   <th>Host</th>
@@ -451,36 +442,27 @@ export default function BackupsClient() {
                 {sorted.map((s) => {
                   const sid = s.short_id ?? s.id ?? "";
                   return (
-                    <tr key={s.id ?? sid} className="border-t border-stone-100 [&>td]:py-2">
+                    <tr key={s.id ?? sid} className="border-t border-night/10 [&>td]:py-2">
                       <td className="font-mono text-xs">{sid || "—"}</td>
                       <td>
-                        {fmtTs(s.time)} <span className="text-xs text-stone-400">{timeAgo(s.time)}</span>
+                        {fmtTs(s.time)} <span className="text-xs text-night/40">{timeAgo(s.time)}</span>
                       </td>
-                      <td className="text-xs text-stone-500">{s.hostname ?? "—"}</td>
-                      <td className="text-xs text-stone-500">{(s.tags ?? []).join(", ")}</td>
+                      <td className="text-xs text-night/50">{s.hostname ?? "—"}</td>
+                      <td className="text-xs text-night/50">{(s.tags ?? []).join(", ")}</td>
                       <td className="text-right">
                         <div className="flex justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setRestoreTarget(sid)}
-                            disabled={isActive(jobs.restore)}
-                            className="rounded border border-stone-300 px-3 py-1 text-xs text-stone-700 disabled:opacity-50"
-                          >
+                          <Button type="button" variant="secondary" size="sm" onClick={() => setRestoreTarget(sid)} disabled={isActive(jobs.restore)}>
                             Restore…
-                          </button>
+                          </Button>
                           <a
                             href={`/api/admin/backup/download?snapshot=${encodeURIComponent(sid)}`}
-                            className="rounded border border-stone-300 px-3 py-1 text-xs text-stone-700"
+                            className="inline-flex items-center rounded-lg border border-night/20 px-3 py-1.5 text-xs font-semibold text-night hover:bg-sand/20"
                           >
                             Download
                           </a>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(sid)}
-                            className="rounded border border-red-200 px-3 py-1 text-xs text-red-700"
-                          >
+                          <Button type="button" variant="danger" size="sm" onClick={() => setDeleteTarget(sid)}>
                             Delete…
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -490,10 +472,10 @@ export default function BackupsClient() {
             </table>
           </div>
         )}
-        <p className="mt-3 text-xs text-stone-400">
+        <p className="mt-3 text-xs text-night/40">
           Download fetches and decrypts the snapshot's database on the server and sends it to your browser — nothing on the server changes.
         </p>
-      </section>
+      </Card>
 
       {/* ----------------------------------------------------------- modals */}
       {restoreTarget && (
@@ -513,7 +495,7 @@ export default function BackupsClient() {
             type="button"
             onClick={() => void startRestore(restoreTarget, true)}
             disabled={modalBusy}
-            className="mt-3 text-xs font-medium text-stone-700 underline"
+            className="mt-3 text-xs font-semibold text-night underline"
           >
             Run a dry-run first (no downtime, nothing is replaced)
           </button>

@@ -13,6 +13,7 @@ const config: Config = {
           DEFAULT: "#2d545e",
           shadow: "#12343b",
         },
+        paper: "#f8f2e9",
       },
     },
   },
