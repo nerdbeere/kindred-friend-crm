@@ -36,9 +36,13 @@ fi
 
 # One-time setup token: regenerated on every run so re-deploys get a fresh one.
 # It's consumed by POST /api/setup and then deleted.
+# Mode 0640 root:kindred — the Next.js app (running as kindred) reads it
+# directly via fs.readFile to verify the wizard's token input. AUTH_SECRET
+# above stays 0600 because systemd's EnvironmentFile reads it as root before
+# dropping to the kindred user.
 SETUP_TOKEN="$(head -c 16 /dev/urandom | base64 | tr -d '/+=' | tr '+/' '-_' | cut -c1-22)"
 printf '%s\n' "$SETUP_TOKEN" > "$SETUP_TOKEN_FILE"
-chmod 0600 "$SETUP_TOKEN_FILE"
+chmod 0640 "$SETUP_TOKEN_FILE"
 chown root:"$KINDRED_USER" "$SETUP_TOKEN_FILE"
 
 # Print ONLY the setup token to stdout — setup-lxc.sh captures this.
