@@ -64,12 +64,16 @@ for f in /etc/kindred/backup.env /etc/kindred/restic.pass; do
   fi
 done
 
-# Self-test: invoke the helper AS the kindred user via sudo -n. We expect
-# the helper to RUN and reject the missing input file with a JSON error —
-# that proves the sudoers rule matches. "a password is required" means the
-# rule still doesn't match (wrong path, missing wildcard, ...).
+# Self-test: invoke the helper AS the kindred user via sudo -n, WITH a
+# dummy config-path argument. The dummy arg is REQUIRED: the wildcard rule
+# `...configure-backup-privileged.js *` only matches when at least one
+# extra argument follows the script path — a bare invocation legitimately
+# fails the match and would falsely report a broken rule (verified on
+# Debian 12). We expect the helper to RUN and reject the missing file with
+# a JSON error; "a password is required" means the rule doesn't match.
+SELFTEST_ARG="/tmp/kindred-sudoers-selftest.json"
 log "Self-testing the sudoers rule as user $KINDRED_USER ..."
-OUT="$(su -s /bin/bash "$KINDRED_USER" -c 'sudo -n /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js 2>&1' || true)"
+OUT="$(su -s /bin/bash "$KINDRED_USER" -c "sudo -n /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js $SELFTEST_ARG 2>&1" || true)"
 if printf '%s' "$OUT" | grep -qi "a password is required"; then
   die "sudoers rule installed but the helper invocation still demands a password — inspect $SUDOERS_FILE"
 fi
