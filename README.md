@@ -126,6 +126,39 @@ Anyone with the URL can read the feed — keep it secret. To rotate the token,
 delete the `feed_token` row from the `settings` table (or set `ICS_FEED_TOKEN`
 in the systemd unit) and restart the service.
 
+## AI agent API
+
+Machine clients (AI agents, scripts) can manage contacts over a JSON API,
+authenticated with the **same token as the ICS feed**, sent as a Bearer
+header:
+
+```
+Authorization: Bearer <feed-token>
+```
+
+| Endpoint                                    | Description                                   |
+| ------------------------------------------- | --------------------------------------------- |
+| `GET /api/agent/contacts`                   | List all, sorted by upcoming birthday         |
+| `GET /api/agent/contacts?q=<text>`          | Substring search on name + notes              |
+| `GET /api/agent/contacts?within_days=<n>`   | Only birthdays within the next `n` days       |
+| `GET /api/agent/contacts/<id>`              | Get one contact                               |
+| `POST /api/agent/contacts`                  | Create (same validation as the web UI)        |
+| `PUT /api/agent/contacts/<id>`              | Full-replacement update                       |
+| `DELETE /api/agent/contacts/<id>`           | Delete permanently                            |
+
+Reads include a computed `days_until` field. Example:
+
+```bash
+TOKEN=$(npm run -s print:feed-token)
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3000/api/agent/contacts?within_days=30"
+```
+
+A ready-made agent skill teaching AI coding assistants how to use this API
+lives in [`skills/kindred/SKILL.md`](skills/kindred/SKILL.md) — copy or
+symlink it into your agent's skills directory (e.g.
+`~/.config/opencode/skills/` or `~/.agents/skills/`).
+
 ## Local development
 
 ```bash
@@ -151,10 +184,15 @@ app/
   api/contacts/route.ts          # GET (list), POST (create)
   api/contacts/[id]/route.ts    # PUT, DELETE
   api/feed/[token]/route.ts     # ICS feed (token-gated, .ics suffix stripped)
+  api/agent/contacts/route.ts   # agent API: list/search/upcoming, create
+  api/agent/contacts/[id]/route.ts  # agent API: get, update, delete
 lib/
   db.ts                          # better-sqlite3 singleton (WAL), schema, token
   contacts.ts                    # CRUD, validation, upcoming-birthday sort
   ics.ts                         # yearly recurring all-day events via `ics`
+  agent-auth.ts                  # Bearer-token check for /api/agent/*
+skills/
+  kindred/SKILL.md               # agent skill: teaches AI to use the API
 scripts/
   print-feed-token.js            # token helper (used by deploy + npm script)
   update.sh                      # in-container update flow
