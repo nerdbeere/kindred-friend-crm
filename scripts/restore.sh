@@ -57,9 +57,16 @@ while [ $# -gt 0 ]; do
 done
 
 # --- Helpers ----------------------------------------------------------------
-log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit "${2:-1}"; }
+# Colorize only on a real terminal — job logs + journald get plain text.
+if [ -t 1 ]; then
+  log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+  warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
+  die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit "${2:-1}"; }
+else
+  log()  { printf '==> %s\n' "$*"; }
+  warn() { printf 'WARN: %s\n' "$*" >&2; }
+  die()  { printf 'ERROR: %s\n' "$*" >&2; exit "${2:-1}"; }
+fi
 
 emit_status() {
   local status="$1" snapshot_id="$2" error="${3:-}"

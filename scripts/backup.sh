@@ -46,12 +46,24 @@ RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-/etc/kindred/restic.pass}"
 KEEP_DAILY="${BACKUP_KEEP_DAILY:-7}"
 KEEP_WEEKLY="${BACKUP_KEEP_WEEKLY:-4}"
 KEEP_MONTHLY="${BACKUP_KEEP_MONTHLY:-6}"
+# Rolling window in which NO snapshot is pruned: all backups from the last
+# N hours survive, so a manual backup never replaces another one from the
+# current day. Daily/weekly/monthly thinning applies beyond the window.
+# 0 disables the window (pure daily/weekly/monthly thinning).
+KEEP_WITHIN_HOURS="${BACKUP_KEEP_WITHIN_HOURS:-24}"
 CHECK_WEEKLY="${BACKUP_CHECK_WEEKLY:-1}"
 
 # --- Helpers ----------------------------------------------------------------
-log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit "${2:-1}"; }
+# Colorize only on a real terminal — job logs + journald get plain text.
+if [ -t 1 ]; then
+  log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+  warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
+  die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit "${2:-1}"; }
+else
+  log()  { printf '==> %s\n' "$*"; }
+  warn() { printf 'WARN: %s\n' "$*" >&2; }
+  die()  { printf 'ERROR: %s\n' "$*" >&2; exit "${2:-1}"; }
+fi
 
 emit_status() {
   # Single JSON line to journald tagged kindred-backup.
@@ -122,12 +134,24 @@ SNAPSHOT_ID="$(printf '%s\n' "$SNAPSHOT_OUT" | grep -E '"message_type":"summary"
 [ -n "$SNAPSHOT_ID" ] || SNAPSHOT_ID="unknown"
 
 # --- 3. forget + prune (retention) -----------------------------------------
-log "Applying retention (daily=$KEEP_DAILY weekly=$KEEP_WEEKLY monthly=$KEEP_MONTHLY) ..."
-if ! restic forget \
-      --keep-daily   "$KEEP_DAILY" \
-      --keep-weekly  "$KEEP_WEEKLY" \
-      --keep-monthly "$KEEP_MONTHLY" \
-      --prune >/dev/null 2>&1; then
+# restic keep-policies are a UNION: a snapshot survives if ANY policy keeps
+# it. The keep-within window protects all recent snapshots (incl. same-day
+# manual backups); daily/weekly/monthly thin out older history.
+FORGET_ARGS=(
+  --keep-daily   "$KEEP_DAILY"
+  --keep-weekly  "$KEEP_WEEKLY"
+  --keep-monthly "$KEEP_MONTHLY"
+  --prune
+)
+if [ "$KEEP_WITHIN_HOURS" != "0" ]; then
+  FORGET_ARGS=(--keep-within "${KEEP_WITHIN_HOURS}h" "${FORGET_ARGS[@]}")
+fi
+if [ "$KEEP_WITHIN_HOURS" != "0" ]; then
+  log "Applying retention (within=${KEEP_WITHIN_HOURS}h daily=$KEEP_DAILY weekly=$KEEP_WEEKLY monthly=$KEEP_MONTHLY) ..."
+else
+  log "Applying retention (daily=$KEEP_DAILY weekly=$KEEP_WEEKLY monthly=$KEEP_MONTHLY) ..."
+fi
+if ! restic forget "${FORGET_ARGS[@]}" >/dev/null 2>&1; then
   warn "restic forget/prune failed — data is still safely backed up, but retention did not run"
   emit_status warn "$SNAPSHOT_ID" "$DURATION" "$SNAPSHOT_SIZE" 0 "forget-prune-failed"
   # Non-fatal: don't exit. Continue to optional check.
