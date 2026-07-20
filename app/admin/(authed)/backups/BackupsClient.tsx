@@ -25,7 +25,7 @@ interface Status {
   prefix?: string | null;
   region?: string | null;
   schedule?: string;
-  retention?: { keep_daily: string; keep_weekly: string; keep_monthly: string; check_weekly: string };
+  retention?: { keep_daily: string; keep_weekly: string; keep_monthly: string; keep_within_hours?: string; check_weekly: string };
   last_backup?: { ts: string | null; status: string | null; snapshot_id: string | null; duration_s: number | null; size_bytes: number | null; error: string | null } | null;
   next_run?: string | null;
   repo_size_bytes?: number | null;
@@ -307,7 +307,11 @@ export default function BackupsClient() {
             <div className="flex justify-between"><dt className="text-stone-500">Next run</dt><dd title={fmtTs(status.next_run)}>{fmtTs(status.next_run)}</dd></div>
             <div className="flex justify-between">
               <dt className="text-stone-500">Retention</dt>
-              <dd>{status.retention ? `${status.retention.keep_daily}d / ${status.retention.keep_weekly}w / ${status.retention.keep_monthly}m` : "—"}</dd>
+              <dd title="All snapshots within the window are kept; daily/weekly/monthly thinning applies beyond it">
+                {status.retention
+                  ? `${status.retention.keep_within_hours && status.retention.keep_within_hours !== "0" ? `${status.retention.keep_within_hours}h window + ` : ""}${status.retention.keep_daily}d / ${status.retention.keep_weekly}w / ${status.retention.keep_monthly}m`
+                  : "—"}
+              </dd>
             </div>
           </dl>
         </section>

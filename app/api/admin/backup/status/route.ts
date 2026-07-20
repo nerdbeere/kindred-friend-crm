@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
       keep_daily: env.BACKUP_KEEP_DAILY || "7",
       keep_weekly: env.BACKUP_KEEP_WEEKLY || "4",
       keep_monthly: env.BACKUP_KEEP_MONTHLY || "6",
+      keep_within_hours: env.BACKUP_KEEP_WITHIN_HOURS || "24",
       check_weekly: env.BACKUP_CHECK_WEEKLY || "1",
     },
     last_backup: lastBackupJson

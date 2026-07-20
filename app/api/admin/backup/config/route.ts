@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     keep_daily: env.BACKUP_KEEP_DAILY || "7",
     keep_weekly: env.BACKUP_KEEP_WEEKLY || "4",
     keep_monthly: env.BACKUP_KEEP_MONTHLY || "6",
+    keep_within_hours: env.BACKUP_KEEP_WITHIN_HOURS || "24",
     check_weekly: env.BACKUP_CHECK_WEEKLY || "1",
   });
 }
@@ -30,6 +31,7 @@ interface PutBody {
   keep_daily?: number;
   keep_weekly?: number;
   keep_monthly?: number;
+  keep_within_hours?: number;
   check_weekly?: number;
 }
 
@@ -57,6 +59,7 @@ export async function PUT(request: NextRequest) {
   const newDaily = clamp(body.keep_daily, 1, 90, 7);
   const newWeekly = clamp(body.keep_weekly, 1, 52, 4);
   const newMonthly = clamp(body.keep_monthly, 1, 24, 6);
+  const newWithin = clamp(body.keep_within_hours, 0, 168, 24);
   const newCheck = clamp(body.check_weekly, 0, 1, 1);
 
   // Read the existing backup.env, only swap the retention lines (don't
@@ -78,6 +81,7 @@ export async function PUT(request: NextRequest) {
     if (k === "BACKUP_KEEP_DAILY") return setLine("BACKUP_KEEP_DAILY", newDaily);
     if (k === "BACKUP_KEEP_WEEKLY") return setLine("BACKUP_KEEP_WEEKLY", newWeekly);
     if (k === "BACKUP_KEEP_MONTHLY") return setLine("BACKUP_KEEP_MONTHLY", newMonthly);
+    if (k === "BACKUP_KEEP_WITHIN_HOURS") return setLine("BACKUP_KEEP_WITHIN_HOURS", newWithin);
     if (k === "BACKUP_CHECK_WEEKLY") return setLine("BACKUP_CHECK_WEEKLY", newCheck);
     return line;
   });
@@ -101,6 +105,7 @@ export async function PUT(request: NextRequest) {
           keep_daily: newDaily,
           keep_weekly: newWeekly,
           keep_monthly: newMonthly,
+          keep_within_hours: newWithin,
           check_weekly: newCheck,
         },
       },
@@ -109,5 +114,5 @@ export async function PUT(request: NextRequest) {
   }
 
   invalidateBackupEnvCache();
-  return NextResponse.json({ ok: true, keep_daily: newDaily, keep_weekly: newWeekly, keep_monthly: newMonthly, check_weekly: newCheck });
+  return NextResponse.json({ ok: true, keep_daily: newDaily, keep_weekly: newWeekly, keep_monthly: newMonthly, keep_within_hours: newWithin, check_weekly: newCheck });
 }

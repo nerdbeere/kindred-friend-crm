@@ -123,6 +123,7 @@ All secrets live in `/etc/kindred/`. Layout:
 | `BACKUP_KEEP_DAILY`       | no       | `7`                                                  | Default 7.                                               |
 | `BACKUP_KEEP_WEEKLY`      | no       | `4`                                                  | Default 4.                                               |
 | `BACKUP_KEEP_MONTHLY`     | no       | `6`                                                  | Default 6.                                               |
+| `BACKUP_KEEP_WITHIN_HOURS` | no      | `24`                                                 | Rolling window in which NO snapshot is pruned — all backups from the last N hours survive, so a manual backup never replaces another same-day backup. `0` disables. |
 | `BACKUP_CHECK_WEEKLY`     | no       | `1`                                                  | Default 1 — run `restic check` on Sundays.               |
 | `DATABASE_PATH`           | no       | `/opt/kindred/data/kindred.db`                       | Default: `/opt/kindred/data/kindred.db`.                 |
 | `BACKUP_SNAPSHOT_DIR`     | no       | `/var/lib/kindred-backup`                            | Where the consistent SQLite snapshot is staged.          |
@@ -134,7 +135,13 @@ All secrets live in `/etc/kindred/`. Layout:
 | ------------- | -------- | ------------------------------------------------------------------ |
 | `AUTH_SECRET`  | yes      | 32 random bytes, base64. Used to sign the `kindred_admin` cookie.  |
 
-Retention default: **1 backup/day at 03:00, 7 daily / 4 weekly / 6 monthly → ~17 snapshots, ~1 year of history.**
+Retention default: **1 backup/day at 03:00, all snapshots kept for 24h, then 7 daily / 4 weekly / 6 monthly → ~17 long-term snapshots, ~1 year of history.**
+
+`restic forget` keep-policies are a UNION — a snapshot survives if any
+policy keeps it. The `--keep-within 24h` window protects all recent
+snapshots (including same-day manual backups, which `--keep-daily` alone
+would collapse to one-per-day); daily/weekly/monthly thinning applies
+beyond the window.
 
 ---
 
@@ -219,7 +226,7 @@ Runs as `kindred`. Reads `/etc/kindred/backup.env`.
 ```
 sqlite3 <DATABASE_PATH> ".backup '<SNAPSHOT_PATH>'"          # consistent snapshot
 restic backup <SNAPSHOT_DIR> --tag kindred --tag <hostname>   # encrypted upload
-restic forget --keep-daily N --keep-weekly N --keep-monthly N --prune
+restic forget --keep-within 24h --keep-daily N --keep-weekly N --keep-monthly N --prune
 # Sundays: restic check --read-data-subset=5%
 ```
 

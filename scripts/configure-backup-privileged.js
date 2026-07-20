@@ -173,6 +173,7 @@ const backupEnv = [
   `BACKUP_KEEP_DAILY=7`,
   `BACKUP_KEEP_WEEKLY=4`,
   `BACKUP_KEEP_MONTHLY=6`,
+  `BACKUP_KEEP_WITHIN_HOURS=24`,
   `BACKUP_CHECK_WEEKLY=1`,
   `DATABASE_PATH=${APP_DIR}/data/kindred.db`,
   `BACKUP_SNAPSHOT_DIR=/var/lib/kindred-backup`,
