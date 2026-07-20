@@ -8,8 +8,10 @@
 // both from the first-run wizard's POST /api/setup and from the admin UI's
 // POST /api/admin/backup/enable.
 //
-// Sudoers whitelist (installed by proxmox/setup-lxc.sh):
-//   kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js
+// Sudoers whitelist (installed by scripts/install-backup-prereqs.sh):
+//   kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js *
+// (The trailing ` *` wildcard is mandatory — sudoers matches args EXACTLY
+// without it, and the real invocation appends the JSON file path.)
 //
 // Usage (as root via sudo):
 //   sudo -n /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js <json-file>

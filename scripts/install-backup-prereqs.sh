@@ -39,9 +39,13 @@ log "Writing sudoers rule for the privileged backup helper ..."
 cat > "$SUDOERS_FILE" <<'SUDOERS'
 # Managed by scripts/install-backup-prereqs.sh
 # Lets the unprivileged kindred user invoke the backup-config helper as root.
+# The trailing ` *` wildcard is REQUIRED: sudoers matches command arguments
+# EXACTLY unless a wildcard is present, and the real invocation always
+# appends the JSON config file path. Without it the rule silently never
+# matched and sudo demanded a password.
 # The helper validates its input file (path under /tmp, owned by kindred,
 # JSON schema) before touching /etc/kindred/*.
-kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js
+kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js *
 SUDOERS
 chmod 0440 "$SUDOERS_FILE"
 chown root:root "$SUDOERS_FILE"
@@ -59,6 +63,17 @@ for f in /etc/kindred/backup.env /etc/kindred/restic.pass; do
     log "Repaired perms on $f (0640 root:$KINDRED_USER)"
   fi
 done
+
+# Self-test: invoke the helper AS the kindred user via sudo -n. We expect
+# the helper to RUN and reject the missing input file with a JSON error —
+# that proves the sudoers rule matches. "a password is required" means the
+# rule still doesn't match (wrong path, missing wildcard, ...).
+log "Self-testing the sudoers rule as user $KINDRED_USER ..."
+OUT="$(su -s /bin/bash "$KINDRED_USER" -c 'sudo -n /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js 2>&1' || true)"
+if printf '%s' "$OUT" | grep -qi "a password is required"; then
+  die "sudoers rule installed but the helper invocation still demands a password — inspect $SUDOERS_FILE"
+fi
+printf '  helper responded (sudo OK): %s\n' "$(printf '%s' "$OUT" | head -n1)"
 
 log "Backup prerequisites installed OK."
 echo "  - sudo: $(sudo -V | head -n1)"

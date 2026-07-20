@@ -182,16 +182,31 @@ The admin account and backups are configured through a one-time wizard,
 
 ## 6. Sudoers whitelist
 
-Restore needs to stop/restart the `kindred` systemd unit, but the backup
-job runs as the unprivileged `kindred` user. One narrow sudoers rule is
-written by `enable-backup-lxc.sh` to `/etc/sudoers.d/kindred-backup`
-(`0440`, `root:root`):
+Two narrow rules, both `0440 root:root` under `/etc/sudoers.d/`:
+
+**Service control** (restore stops/restarts the `kindred` unit; written by
+`enable-backup-lxc.sh` / the privileged helper to `kindred-backup`):
 
 ```
 kindred ALL=(root) NOPASSWD: /bin/systemctl restart kindred, /bin/systemctl stop kindred, /bin/systemctl start kindred
 ```
 
-Nothing else. No `NOPASSWD: ALL`, no wildcards, no shell escapes.
+**Backup configuration** (wizard + `/api/admin/backup/enable` invoke the
+privileged helper; written by `scripts/install-backup-prereqs.sh` to
+`kindred-configure-backup`):
+
+```
+kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js *
+```
+
+The trailing ` *` is mandatory: sudoers matches command arguments EXACTLY
+unless a wildcard is present, and the real invocation always appends the
+JSON config file path. Without it the rule silently never matched and
+`sudo -n` failed with "a password is required". The helper validates its
+input (path under `/tmp`, owned by `kindred`, ≤64 KiB, JSON schema) before
+touching anything.
+
+Nothing else. No `NOPASSWD: ALL`, no shell escapes.
 
 ---
 

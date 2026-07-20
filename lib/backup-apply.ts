@@ -9,8 +9,10 @@ import { invalidateBackupEnvCache } from "./backup-runner";
  * authenticated "enable backups" admin route (POST /api/admin/backup/enable).
  *
  * The helper is /opt/kindred/scripts/configure-backup-privileged.js and
- * the sudoers rule (installed by setup-lxc.sh) is:
- *   kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js
+ * the sudoers rule (installed by scripts/install-backup-prereqs.sh) is:
+ *   kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js *
+ * (The trailing wildcard is required — sudoers matches args exactly without
+ * it, and the invocation always appends the JSON config file path.)
  */
 
 const CONFIGURE_HELPER = "/opt/kindred/scripts/configure-backup-privileged.js";
@@ -79,15 +81,16 @@ export async function applyBackupConfig(input: BackupConfigInput): Promise<Apply
     const raw = stderr || stdout || result.error?.message || "unknown";
     // Give actionable guidance for the most common failure: the sudoers
     // rule for the privileged helper isn't installed (e.g. the CT was
-    // provisioned before the sudoers.d fix).
+    // provisioned before the sudoers.d fix) or is an OLDER rule missing
+    // the trailing ` *` wildcard (sudoers matches args exactly without it).
     if (/a password is required/i.test(raw) || /no sudoers sources/i.test(raw)) {
       return {
         ok: false,
         error:
-          "The sudoers rule for the backup helper isn't installed on this container. " +
+          "The sudoers rule for the backup helper is missing or outdated on this container. " +
           "Fix it by running on the Proxmox host: " +
-          "`pct exec <CT_ID> -- bash /opt/kindred/scripts/install-backup-prereqs.sh`, " +
-          "then retry.",
+          "`pct exec <CT_ID> -- bash /opt/kindred/scripts/install-backup-prereqs.sh` " +
+          "(update first: `pct exec <CT_ID> -- bash /opt/kindred/scripts/update.sh`), then retry.",
       };
     }
     return { ok: false, error: `helper exited ${result.status}: ${raw}` };
