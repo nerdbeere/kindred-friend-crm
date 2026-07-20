@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createContact,
   daysUntilBirthday,
+  fullName,
   listContacts,
   validateContact,
 } from "@/lib/contacts";
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     .filter(
       (c) =>
         (q === "" ||
-          c.name.toLowerCase().includes(q) ||
+          fullName(c).toLowerCase().includes(q) ||
           c.notes.toLowerCase().includes(q)) &&
         (withinDays === null || c.days_until <= withinDays),
     );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Card, Field, Input } from "@/app/components/ui";
 
 function strength(pw: string): { score: 0 | 1 | 2 | 3 | 4; label: string } {
   let score = 0;
@@ -60,52 +61,53 @@ export default function SetupWizard() {
     }
   }
 
-  const inputCls =
-    "mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none disabled:opacity-50";
-
   return (
-    <div className="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+    <Card className="mt-6">
       <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-stone-700">Setup token</label>
-          <input
+        <Field
+          label="Setup token"
+          htmlFor="setup_token"
+          hint={
+            <>
+              The installer printed this on the console at the end of provisioning. It's also at{" "}
+              <code>/etc/kindred/setup-token</code> inside the CT.
+            </>
+          }
+        >
+          <Input
+            id="setup_token"
             type="text"
             autoComplete="off"
             spellCheck={false}
-            className={`${inputCls} font-mono`}
+            className="font-mono"
             value={setupToken}
             onChange={(e) => setSetupToken(e.target.value)}
             placeholder="e.g. abc123XYZ…"
             disabled={submitting}
             required
           />
-          <p className="mt-1 text-xs text-stone-500">
-            The installer printed this on the console at the end of provisioning. It's also at{" "}
-            <code>/etc/kindred/setup-token</code> inside the CT.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-stone-700">Admin password</label>
-          <input
+        </Field>
+        <Field
+          label="Admin password"
+          htmlFor="admin_password"
+          hint={<>At least 12 characters. Strength: <span className="font-mono">{pwStrength.label}</span></>}
+        >
+          <Input
+            id="admin_password"
             type="password"
             autoComplete="new-password"
-            className={inputCls}
             value={adminPassword}
             onChange={(e) => setAdminPassword(e.target.value)}
             minLength={12}
             disabled={submitting}
             required
           />
-          <p className="mt-1 text-xs text-stone-500">
-            At least 12 characters. Strength: <span className="font-mono">{pwStrength.label}</span>
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-stone-700">Confirm admin password</label>
-          <input
+        </Field>
+        <Field label="Confirm admin password" htmlFor="admin_password_confirm">
+          <Input
+            id="admin_password_confirm"
             type="password"
             autoComplete="new-password"
-            className={inputCls}
             value={adminPasswordConfirm}
             onChange={(e) => setAdminPasswordConfirm(e.target.value)}
             minLength={12}
@@ -113,22 +115,17 @@ export default function SetupWizard() {
             required
           />
           {adminPasswordConfirm.length > 0 && !passwordsMatch && (
-            <p className="mt-1 text-xs text-red-600">Passwords do not match.</p>
+            <p className="mt-1 text-xs font-medium text-red-700">Passwords do not match.</p>
           )}
-        </div>
-        {error && <p className="whitespace-pre-wrap text-sm text-red-600">{error}</p>}
+        </Field>
+        {error && <p className="whitespace-pre-wrap text-sm font-medium text-red-700">{error}</p>}
         <div className="flex items-center justify-between">
-          <p className="text-xs text-stone-400">Encrypted backups: configure afterwards in the admin UI.</p>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!formOk || submitting}
-            className="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
+          <p className="text-xs text-night/45">Encrypted backups: configure afterwards in the admin UI.</p>
+          <Button type="button" onClick={submit} disabled={!formOk || submitting}>
             {submitting ? "Setting up…" : "Finish setup"}
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

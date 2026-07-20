@@ -16,21 +16,28 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!(await isAuthenticatedServer())) redirect("/admin/login");
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
-      <header className="flex items-center justify-between border-b border-stone-200 pb-4">
+    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+      <header className="flex items-center justify-between gap-3 border-b border-night/10 pb-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Kindred admin</h1>
-          <p className="text-xs text-stone-500">Manage backups and settings.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-sand-shadow">Admin</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-night">Kindred admin</h1>
         </div>
-        <form action="/api/admin/logout" method="post" className="text-sm">
-          <button type="submit" className="rounded border border-stone-300 px-3 py-1 text-stone-700">
+        <form action="/api/admin/logout" method="post">
+          <button
+            type="submit"
+            className="rounded-lg border border-night/20 px-3 py-1.5 text-sm font-semibold text-night hover:bg-sand/20"
+          >
             Sign out
           </button>
         </form>
       </header>
-      <nav className="mt-4 flex gap-4 text-sm">
+      <nav className="mt-4 flex gap-1 text-sm">
         {TABS.map((t) => (
-          <Link key={t.href} href={t.href} className="text-stone-700 underline-offset-4 hover:underline">
+          <Link
+            key={t.href}
+            href={t.href}
+            className="rounded-lg px-3 py-1.5 font-semibold text-night/65 hover:bg-sand/20 hover:text-night"
+          >
             {t.label}
           </Link>
         ))}

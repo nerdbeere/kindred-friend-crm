@@ -101,7 +101,8 @@ log "Seeding test SQLite DB at $DEV_DIR/data/kindred.db ..."
 sqlite3 "$DEV_DIR/data/kindred.db" <<'SQL'
 CREATE TABLE contacts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL DEFAULT '',
   birth_month INTEGER NOT NULL,
   birth_day INTEGER NOT NULL,
   birth_year INTEGER,
@@ -112,10 +113,10 @@ CREATE TABLE settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
-INSERT INTO contacts (name, birth_month, birth_day, birth_year, notes) VALUES
-  ('Ada Lovelace', 12, 10, 1815, 'mathematician'),
-  ('Alan Turing', 6, 23, 1912, 'computer scientist'),
-  ('Grace Hopper', 12, 9, 1906, 'compiler pioneer');
+INSERT INTO contacts (first_name, last_name, birth_month, birth_day, birth_year, notes) VALUES
+  ('Ada', 'Lovelace', 12, 10, 1815, 'mathematician'),
+  ('Alan', 'Turing', 6, 23, 1912, 'computer scientist'),
+  ('Grace', 'Hopper', 12, 9, 1906, 'compiler pioneer');
 INSERT INTO settings (key, value) VALUES ('feed_token', 'dev-test-token-do-not-use');
 SQL
 sqlite3 "$DEV_DIR/data/kindred.db" "PRAGMA integrity_check;"
@@ -162,7 +163,7 @@ if [ "$SRC_SHA" = "$DST_SHA" ]; then
   PASS=1
 else
   warn "SHAs differ — verifying row-level equality (WAL checkpoint may reorder pages)..."
-  ROW_DIFF="$(sqlite3 "$RESTORED_DB" "SELECT name FROM contacts ORDER BY id;" | diff - <(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT name FROM contacts ORDER BY id;") | wc -l | tr -d '[:space:]')"
+  ROW_DIFF="$(sqlite3 "$RESTORED_DB" "SELECT first_name || ' ' || last_name FROM contacts ORDER BY id;" | diff - <(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT first_name || ' ' || last_name FROM contacts ORDER BY id;") | wc -l | tr -d '[:space:]')"
   TOKEN_DIFF="$(sqlite3 "$RESTORED_DB" "SELECT value FROM settings WHERE key='feed_token';" | diff - <(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT value FROM settings WHERE key='feed_token';") | wc -l | tr -d '[:space:]')"
   if [ "$ROW_DIFF" = "0" ] && [ "$TOKEN_DIFF" = "0" ]; then
     log "Row-level + token verification passed."

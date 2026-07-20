@@ -10,8 +10,8 @@ metadata:
 ## Purpose
 
 Kindred is a minimal self-hosted friend/relationship CRM. It stores people
-(name, birthday, notes) in SQLite. This skill lets an AI agent manage those
-contacts through Kindred's token-authenticated REST API.
+(first name, last name, birthday, notes) in SQLite. This skill lets an AI
+agent manage those contacts through Kindred's token-authenticated REST API.
 
 ## Setup
 
@@ -36,7 +36,8 @@ matching HTTP status (401 bad/missing token, 400 invalid input, 404 not found).
 ```json
 {
   "id": 1,
-  "name": "Ada Lovelace",
+  "first_name": "Ada",
+  "last_name": "Lovelace",
   "birth_month": 12,
   "birth_day": 10,
   "birth_year": 1815,
@@ -75,17 +76,18 @@ GET /api/agent/contacts/<id>
 
 ```
 POST /api/agent/contacts
-{"name": "Grace Hopper", "birth_month": 12, "birth_day": 9, "birth_year": 1906, "notes": "..."}
+{"first_name": "Grace", "last_name": "Hopper", "birth_month": 12, "birth_day": 9, "birth_year": 1906, "notes": "..."}
 ```
 
-- Required: `name` (string), `birth_month` (1–12), `birth_day` (valid for the
-  month). Optional: `birth_year` (1800–current year or `null`), `notes`.
+- Required: `first_name` (string), `birth_month` (1–12), `birth_day` (valid for
+  the month). Optional: `last_name` (string), `birth_year` (1800–current year
+  or `null`), `notes`.
 - Responds 201 with the created contact.
 
 ```bash
 curl -sS -X POST -H "Authorization: Bearer $KINDRED_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Grace Hopper","birth_month":12,"birth_day":9,"birth_year":1906}' \
+  -d '{"first_name":"Grace","last_name":"Hopper","birth_month":12,"birth_day":9,"birth_year":1906}' \
   "$KINDRED_URL/api/agent/contacts"
 ```
 
@@ -95,10 +97,10 @@ curl -sS -X POST -H "Authorization: Bearer $KINDRED_TOKEN" \
 PUT /api/agent/contacts/<id>
 ```
 
-Full replacement, not a patch: the body must contain `name`, `birth_month`,
-and `birth_day` plus any optional fields. To change only part of a contact,
-GET it first, merge the change, and PUT the merged object (without
-`id`/`days_until`).
+Full replacement, not a patch: the body must contain `first_name`,
+`birth_month`, and `birth_day` plus any optional fields (`last_name`,
+`birth_year`, `notes`). To change only part of a contact, GET it first, merge
+the change, and PUT the merged object (without `id`/`days_until`).
 
 ### Delete a contact
 

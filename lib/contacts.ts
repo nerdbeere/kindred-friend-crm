@@ -1,8 +1,10 @@
 import { getDb } from "./db";
+export { fullName } from "./contact-format";
 
 export interface Contact {
   id: number;
-  name: string;
+  first_name: string;
+  last_name: string;
   birth_month: number;
   birth_day: number;
   birth_year: number | null;
@@ -10,7 +12,8 @@ export interface Contact {
 }
 
 export interface ContactInput {
-  name: string;
+  first_name: string;
+  last_name?: string;
   birth_month: number;
   birth_day: number;
   birth_year?: number | null;
@@ -24,9 +27,16 @@ export function validateContact(input: unknown): string | null {
   if (typeof input !== "object" || input === null) return "Invalid body";
   const c = input as Record<string, unknown>;
 
-  if (typeof c.name !== "string" || c.name.trim().length === 0)
-    return "Name is required";
-  if (c.name.length > 200) return "Name is too long";
+  if (typeof c.first_name !== "string" || c.first_name.trim().length === 0)
+    return "First name is required";
+  if (c.first_name.length > 200) return "First name is too long";
+
+  if (
+    c.last_name !== undefined &&
+    c.last_name !== null &&
+    (typeof c.last_name !== "string" || c.last_name.length > 200)
+  )
+    return "Last name is too long";
 
   if (
     typeof c.birth_month !== "number" ||
@@ -82,7 +92,7 @@ export function daysUntilBirthday(month: number, day: number): number {
 export function listContacts(): Contact[] {
   const rows = getDb()
     .prepare(
-      "SELECT id, name, birth_month, birth_day, birth_year, notes FROM contacts",
+      "SELECT id, first_name, last_name, birth_month, birth_day, birth_year, notes FROM contacts",
     )
     .all() as Contact[];
   return rows.sort(
@@ -95,7 +105,7 @@ export function listContacts(): Contact[] {
 export function getContact(id: number): Contact | undefined {
   return getDb()
     .prepare(
-      "SELECT id, name, birth_month, birth_day, birth_year, notes FROM contacts WHERE id = ?",
+      "SELECT id, first_name, last_name, birth_month, birth_day, birth_year, notes FROM contacts WHERE id = ?",
     )
     .get(id) as Contact | undefined;
 }
@@ -103,11 +113,12 @@ export function getContact(id: number): Contact | undefined {
 export function createContact(input: ContactInput): Contact {
   const result = getDb()
     .prepare(
-      `INSERT INTO contacts (name, birth_month, birth_day, birth_year, notes)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO contacts (first_name, last_name, birth_month, birth_day, birth_year, notes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      input.name.trim(),
+      input.first_name.trim(),
+      (input.last_name ?? "").trim(),
       input.birth_month,
       input.birth_day,
       input.birth_year ?? null,
@@ -120,11 +131,12 @@ export function updateContact(id: number, input: ContactInput): Contact | null {
   const result = getDb()
     .prepare(
       `UPDATE contacts
-       SET name = ?, birth_month = ?, birth_day = ?, birth_year = ?, notes = ?
+       SET first_name = ?, last_name = ?, birth_month = ?, birth_day = ?, birth_year = ?, notes = ?
        WHERE id = ?`,
     )
     .run(
-      input.name.trim(),
+      input.first_name.trim(),
+      (input.last_name ?? "").trim(),
       input.birth_month,
       input.birth_day,
       input.birth_year ?? null,

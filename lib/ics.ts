@@ -1,5 +1,5 @@
 import { createEvents, type DateArray, type EventAttributes } from "ics";
-import { listContacts } from "./contacts";
+import { fullName, listContacts } from "./contacts";
 
 /** Next calendar day as a [year, month, day] tuple (handles month/year rollover). */
 function nextDay(year: number, month: number, day: number): DateArray {
@@ -25,7 +25,7 @@ export function buildBirthdayCalendar(): string {
 
     return {
       uid: `kindred-contact-${c.id}@kindred`,
-      title: `${c.name} — Birthday`,
+      title: `${fullName(c)} — Birthday`,
       start: [startYear, c.birth_month, c.birth_day],
       end: nextDay(startYear, c.birth_month, c.birth_day),
       recurrenceRule: "FREQ=YEARLY;INTERVAL=1",

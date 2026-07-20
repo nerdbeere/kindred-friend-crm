@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/app/components/ui";
 
 /**
  * Modal that requires typing a phrase (e.g. "RESTORE" / "DELETE") before
@@ -35,19 +36,19 @@ export default function ConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-night-shadow/50 p-4"
       onClick={() => !busy && onCancel()}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"
+        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-stone-900">{title}</h3>
-        <div className="mt-2 text-sm text-stone-600">{children}</div>
-        <label className="mt-4 block text-xs font-medium text-stone-500">
-          Type <span className="font-mono font-bold text-stone-800">{phrase}</span> to confirm
+        <h3 className="text-base font-bold text-night">{title}</h3>
+        <div className="mt-2 text-sm text-night/65">{children}</div>
+        <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-night/50">
+          Type <span className="font-mono font-bold text-night">{phrase}</span> to confirm
         </label>
         <input
           type="text"
@@ -55,26 +56,21 @@ export default function ConfirmModal({
           onChange={(e) => setTyped(e.target.value)}
           disabled={busy}
           autoFocus
-          className="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-mono text-sm focus:border-stone-500 focus:outline-none disabled:opacity-50"
+          className="mt-1 w-full rounded-lg border border-night/20 px-3 py-2 font-mono text-sm outline-none focus:border-sand-shadow focus:ring-2 focus:ring-sand/45 disabled:opacity-50"
           placeholder={phrase}
         />
         <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="rounded px-4 py-2 text-sm text-stone-600 disabled:opacity-50"
-          >
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onConfirm}
             disabled={typed !== phrase || busy}
-            className="rounded bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            className="bg-red-700 hover:bg-red-800 disabled:opacity-40"
           >
             {busy ? "Working…" : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
