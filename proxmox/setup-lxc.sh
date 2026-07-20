@@ -149,9 +149,24 @@ elif [ ! -f /home/kindred/.ssh/id_ed25519 ]; then
   su -s /bin/bash kindred -c \
     "ssh-keygen -t ed25519 -N '' -q -f /home/kindred/.ssh/id_ed25519 -C kindred-lxc-deploy"
 fi
+chown kindred:kindred /home/kindred/.ssh/id_ed25519
 
-su -s /bin/bash kindred -c \
-  "ssh-keyscan -t ed25519 github.com >> /home/kindred/.ssh/known_hosts 2>/dev/null"
+# Route github.com SSH over port 443 (ssh.github.com). Outbound port 22 is
+# blocked on a lot of LXC host networking; 443 is almost always open and
+# GitHub officially supports it. accept-new auto-pins the host key on first
+# connect (no ssh-keyscan needed).
+cat > /home/kindred/.ssh/config <<'SSHCFG'
+Host github.com
+  HostName ssh.github.com
+  Port 443
+  User git
+  IdentityFile ~/.ssh/id_ed25519
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
+  ServerAliveInterval 60
+SSHCFG
+chown kindred:kindred /home/kindred/.ssh/config
+chmod 600 /home/kindred/.ssh/config
 KEY_EOF
 
   if [ -z "$DEPLOY_KEY" ]; then
@@ -180,9 +195,22 @@ KEY_EOF
 ==============================================================
 KEY_BANNER
 
+    # Read from /dev/tty so the one-liner `curl ... | bash` still works.
+    # Surface the real ssh error on the first failure so it's not a guessing game.
+    shown_err=0
     until pct exec "$CT_ID" -- su -s /bin/bash kindred -c \
-      "GIT_SSH_COMMAND='ssh -o BatchMode=yes' git ls-remote '$GIT_REPO' HEAD" >/dev/null 2>&1; do
-      # Read from /dev/tty so the one-liner `curl ... | bash` still works.
+      "GIT_SSH_COMMAND='ssh -o BatchMode=yes' git ls-remote '$GIT_REPO' HEAD" \
+      >/tmp/kindred-verify.err 2>&1; do
+      if [ "$shown_err" -eq 0 ]; then
+        shown_err=1
+        echo
+        echo "---- ssh/git error (first attempt) ----" >&2
+        cat /tmp/kindred-verify.err >&2 || true
+        echo "---------------------------------------" >&2
+        echo "  - 'Permission denied (publickey)' => deploy key not added/accepted on GitHub yet" >&2
+        echo "  - 'Connection refused/timed out'  => port 443 egress also blocked from the CT" >&2
+        echo
+      fi
       read -r -p "Key not authorized yet. Press Enter to retry (Ctrl-C to abort)... " </dev/tty || exit 1
     done
     log "Deploy key authorized."
