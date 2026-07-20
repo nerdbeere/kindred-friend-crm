@@ -1,6 +1,7 @@
 import { mkdtemp, writeFile, unlink } from "fs/promises";
 import { join } from "path";
 import { spawnSync } from "child_process";
+import { invalidateBackupEnvCache } from "./backup-runner";
 
 /**
  * Apply a backup configuration via the privileged sudoers-whitelisted
@@ -99,6 +100,7 @@ export async function applyBackupConfig(input: BackupConfigInput): Promise<Apply
       try {
         const parsed = JSON.parse(trimmed);
         if (parsed.ok === true) {
+          invalidateBackupEnvCache();
           return { ok: true, repository: parsed.repository, first_backup: parsed.first_backup || "ok" };
         }
         return { ok: false, error: parsed.error || "helper reported failure" };
@@ -107,5 +109,6 @@ export async function applyBackupConfig(input: BackupConfigInput): Promise<Apply
       }
     }
   }
+  invalidateBackupEnvCache();
   return { ok: true, repository: `s3:${cfg.endpoint}/${cfg.bucket}/${cfg.prefix}`, first_backup: "ok" };
 }

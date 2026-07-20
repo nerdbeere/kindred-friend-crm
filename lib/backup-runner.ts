@@ -28,6 +28,11 @@ interface LoadedBackupEnv {
 
 let cachedEnv: LoadedBackupEnv | null = null;
 
+/** Drop the cached /etc/kindred/backup.env parse (call after config changes). */
+export function invalidateBackupEnvCache(): void {
+  cachedEnv = null;
+}
+
 export async function loadBackupEnv(): Promise<LoadedBackupEnv> {
   if (cachedEnv) return cachedEnv;
   const out: LoadedBackupEnv = {};
@@ -122,4 +127,55 @@ export async function resticStats(): Promise<{ total_size?: number; total_file_c
   } catch {
     return {};
   }
+}
+
+/**
+ * Delete a snapshot and prune unreferenced data. Blocking (no service
+ * impact — restic locks are per-repo and short-lived here).
+ */
+export async function resticForgetSnapshot(id: string): Promise<{ ok: boolean; error?: string }> {
+  const env = await loadBackupEnv();
+  if (!env.RESTIC_REPOSITORY) return { ok: false, error: "not configured" };
+  const r = await runBin("restic", ["forget", id, "--prune"], env, 180000);
+  if (!r.ok) {
+    return { ok: false, error: (r.stderr || r.stdout || `exit ${r.exitCode}`).trim().slice(-600) };
+  }
+  return { ok: true };
+}
+
+/**
+ * List file paths inside a snapshot. `restic ls --json` emits one JSON
+ * object per line: a leading {"message_type":"snapshot"} summary, then one
+ * {"message_type":"node","type":"file"|"dir",...} per filesystem node.
+ */
+export async function resticListFiles(id: string): Promise<string[]> {
+  const env = await loadBackupEnv();
+  if (!env.RESTIC_REPOSITORY) return [];
+  const r = await runBin("restic", ["ls", id, "--json"], env, 30000);
+  if (!r.ok) return [];
+  const paths: string[] = [];
+  for (const line of r.stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+    try {
+      const obj = JSON.parse(trimmed) as { message_type?: string; type?: string; path?: string };
+      if (obj.message_type === "node" && obj.type === "file" && typeof obj.path === "string") {
+        paths.push(obj.path);
+      }
+    } catch {
+      /* skip malformed lines */
+    }
+  }
+  return paths;
+}
+
+/** Build the env restic needs (merged backup.env), or null if unconfigured. */
+export async function resticEnv(): Promise<Record<string, string> | null> {
+  const env = await loadBackupEnv();
+  if (!env.RESTIC_REPOSITORY) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (typeof v === "string") out[k] = v;
+  }
+  return out;
 }

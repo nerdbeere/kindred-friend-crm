@@ -64,12 +64,13 @@ What we deliberately do **not** do:
 
 - Backup job runs **inside the LXC**, as the unprivileged `kindred`
   user, via a systemd timer.
-- Secrets in `/etc/kindred/backup.env` (`0600`, `root:kindred`, loaded
+- Secrets in `/etc/kindred/backup.env` (`0640`, `root:kindred`, loaded
   by systemd `EnvironmentFile=`). The restic repo password lives in
-  `/etc/kindred/restic.pass` (`0600`, `root:kindred`).
-- Neither file is ever in git, ever in the Next.js `process.env`, ever
-  readable by the app's HTTP layer directly. The admin API routes read
-  status via restic, not by reading the password file in process memory.
+  `/etc/kindred/restic.pass` (`0640`, `root:kindred`).
+- Neither file is ever in git or served over HTTP. The group-read bit is
+  required: the app (running as `kindred`) parses `backup.env` for status,
+  and ad-hoc restic runs read `restic.pass` as the `kindred` user. Group
+  `kindred` contains only the service account; `other` has no access.
 
 ---
 
@@ -78,7 +79,7 @@ What we deliberately do **not** do:
 | Threat                              | Mitigation                                                                                                                                  |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | S3 backend operator reads data      | Client-side AES-256 via restic; only ciphertext leaves the CT.                                                                              |
-| Restic repo password leaks          | `RESTIC_PASSWORD_FILE` `0600 root:kindred`; never in git, app env, or Next.js `process.env`.                                               |
+| Restic repo password leaks          | `RESTIC_PASSWORD_FILE` `0640 root:kindred` (group = service account only); never in git or served over HTTP.                           |
 | S3 credentials exfiltrated from CT  | IAM creds scoped to one bucket prefix; only `PutObject` / `GetObject` / `DeleteObject` / `ListObjects`. No bucket-admin.                   |
 | Ransomware / malicious deletion     | (Phase 3) Object Lock / WORM where backend supports it (B2, R2, AWS S3, MinIO, Wasabi all do). Separate read-only creds for restore-only hosts. Weekly `restic check` detects tampering. |
 | Silent corruption                   | `restic check --read-data-subset=5%` weekly, full monthly.                                                                                 |
@@ -102,10 +103,10 @@ All secrets live in `/etc/kindred/`. Layout:
 
 ```
 /etc/kindred/
-  backup.env          # S3 endpoint, bucket, prefix, retention, AWS creds (0600 root:kindred)
-  restic.pass         # 32 random bytes, the AES key envelope password   (0600 root:kindred)
+  backup.env          # S3 endpoint, bucket, prefix, retention, AWS creds (0640 root:kindred)
+  restic.pass         # 32 random bytes, the AES key envelope password   (0640 root:kindred)
   auth.env            # AUTH_SECRET for cookie signing                   (0600 root:kindred)
-  setup-token         # one-time token for the first-run wizard          (0600 root:kindred), deleted after use
+  setup-token         # one-time token for the first-run wizard          (0640 root:kindred), deleted after use
 ```
 
 `/etc/kindred/backup.env`:
@@ -160,7 +161,7 @@ The admin account and backups are configured through a one-time wizard,
    you can enable later from `/admin/backups`.
 5. Wizard step 3: **Summary + Finish**. `POST /api/setup` runs:
    - argon2id-hashes the password and writes `settings.admin_password_hash` (atomic transaction)
-   - if backup fields provided: writes `/etc/kindred/backup.env` + `/etc/kindred/restic.pass` (0600 root:kindred), runs `restic init`, installs the systemd units, enables the timer, kicks off the first backup
+    - if backup fields provided: writes `/etc/kindred/backup.env` + `/etc/kindred/restic.pass` (0640 root:kindred), runs `restic init`, installs the systemd units, enables the timer, kicks off the first backup
    - deletes `/etc/kindred/setup-token` (one-time use)
    - signs and sets the `kindred_admin` session cookie — you're logged in immediately
 6. After completion, `/api/setup` returns `410 Gone` and middleware stops redirecting.
@@ -252,7 +253,7 @@ Run as root on the Proxmox host. Idempotent. Steps:
 2. Downloads `restic` (pinned version, SHA-256 verified) to `/usr/local/bin/restic` (`0755`).
 3. Generates `/etc/kindred/restic.pass` (32 random bytes from `/dev/urandom`) if missing.
 4. Prompts for (or accepts via env: `BACKUP_S3_*`, `AWS_*`) the S3 endpoint/bucket/prefix/region/creds.
-5. Writes `/etc/kindred/backup.env` (`0600 root:kindred`).
+5. Writes `/etc/kindred/backup.env` (`0640 root:kindred`).
 6. Runs `restic init` (fails fast on bad creds / unreachable endpoint / non-HTTPS).
 7. Probes the bucket for Object Lock capability; warns if not available — non-fatal.
 8. Installs `systemd/kindred-backup.service` + `systemd/kindred-backup.timer`; writes the sudoers rule (§6).
@@ -348,29 +349,58 @@ journalctl -u kindred-backup.service -n 50
 
 ### `/admin/backups` page
 
-- Status card: last backup time, last `check` time, next scheduled run, repo size, days of history.
-- "Back up now" button → `POST /api/admin/backup`.
-- Snapshot table (paginated) → `GET /api/admin/backup/snapshots`.
-- Per-row "Restore" button → confirmation modal showing timestamp + "brief service downtime" warning → `POST /api/admin/backup/restore { snapshot, confirm: "RESTORE" }`.
+- Status cards: repository + schedule + retention, last backup (status, time, duration, size, snapshot id), storage (repo size, file count, snapshot count).
+- "Back up now" → starts a **background job** (`POST /api/admin/backup`, 202) and polls `GET /api/admin/backup` every 2s, showing the live log tail. Same pattern for "Check integrity" (`/api/admin/backup/check`).
+- Snapshot table → `GET /api/admin/backup/snapshots`. Per-row actions:
+  - **Restore…** → typed-confirmation modal (phrase `RESTORE`) → `POST /api/admin/backup/restore` (async job; see below). A "dry-run first" button is offered in the modal.
+  - **Download** → `GET /api/admin/backup/download?snapshot=<id>` streams the decrypted `snapshot.db` as a file. Read-only.
+  - **Delete…** → typed-confirmation modal (phrase `DELETE`) → `DELETE /api/admin/backup/snapshots` (`restic forget --prune`).
+- When backups aren't configured, the page renders an inline **enable form** (→ `POST /api/admin/backup/enable`) instead of the cards.
+
+### Background jobs
+
+Long-running work runs as detached named jobs (`scripts/run-job.sh`, state
+in `/tmp/kindred-jobs/<name>.{json,log,lock}`) so HTTP requests return
+immediately and the UI can resume polling after a page reload. The main
+`kindred.service` has no `PrivateTmp`, so job state survives app restarts.
+`lib/backup-jobs.ts` synthesizes `error` for jobs whose pid vanished
+(e.g. killed by a restart) and for stale (>6h) "running" states.
+
+Restore is special: it runs **inside the service's cgroup**, and the real
+restore path ends with `systemctl restart kindred` — which kills restore.sh
+itself. restore.sh therefore self-reports phases into `$KINDRED_JOB_FILE`
+(`downloading → verifying → swapping → restarting`), writing `restarting`
+just before issuing the restart. `GET /api/admin/backup/restore` treats a
+reachable request + state `restarting` as proof the app booted with the
+restored DB and flips the job to `ok` (restore.sh's own health check is
+dead by then; if the app had failed to boot, the endpoint wouldn't be
+serving). Manual rollback copies (`*.pre-restore.*`) remain on disk either
+way — see §10.
 
 ### Admin API routes
 
 All require auth. All exec scripts with **arg-validated inputs** passed
 via `execFile` (no shell interpolation, no user input in `--repo` etc.).
 
-| Method | Path                              | Purpose                                       |
-| ------ | --------------------------------- | --------------------------------------------- |
-| POST   | `/api/admin/backup`               | Trigger ad-hoc backup                         |
-| GET    | `/api/admin/backup/status`        | Last backup / check / next-run / repo stats   |
-| GET    | `/api/admin/backup/snapshots`     | `restic snapshots --json` wrapper             |
-| POST   | `/api/admin/backup/restore`       | Body `{ snapshot, confirm }` runs restore.sh   |
-| POST   | `/api/admin/backup/enable`        | Wraps `enable-backup-lxc.sh` (sudoers-wlisted) |
-| GET    | `/api/admin/backup/config`        | Current retention schedule                    |
-| PUT    | `/api/admin/backup/config`        | Update retention (writes `backup.env`)        |
-| POST   | `/api/admin/login`                | Login                                         |
-| POST   | `/api/admin/logout`               | Logout                                        |
-| GET    | `/api/admin/settings`             | Settings page data                             |
-| PUT    | `/api/admin/settings`             | Password rotation                             |
+| Method | Path                              | Purpose                                          |
+| ------ | --------------------------------- | ------------------------------------------------ |
+| POST   | `/api/admin/backup`               | Start ad-hoc backup job (202; 409 if running)    |
+| GET    | `/api/admin/backup`               | Backup job state + log tail                      |
+| POST   | `/api/admin/backup/check`         | Start `restic check --read-data-subset=5%` job   |
+| GET    | `/api/admin/backup/check`         | Check job state + log tail                       |
+| GET    | `/api/admin/backup/status`        | Last backup / next-run / repo stats / job states |
+| GET    | `/api/admin/backup/snapshots`     | `restic snapshots --json` wrapper                |
+| DELETE | `/api/admin/backup/snapshots`     | Body `{ snapshot, confirm:"DELETE" }` forget+prune |
+| POST   | `/api/admin/backup/restore`       | Body `{ snapshot, confirm:"RESTORE", dry_run? }` — starts async restore job |
+| GET    | `/api/admin/backup/restore`       | Restore job state + log tail (restart-flip)      |
+| GET    | `/api/admin/backup/download`      | `?snapshot=<id|latest>` — stream decrypted DB    |
+| POST   | `/api/admin/backup/enable`        | Wraps `enable-backup-lxc.sh` (sudoers-wlisted)   |
+| GET    | `/api/admin/backup/config`        | Current retention schedule                       |
+| PUT    | `/api/admin/backup/config`        | Update retention (writes `backup.env`)           |
+| POST   | `/api/admin/login`                | Login                                            |
+| POST   | `/api/admin/logout`               | Logout                                           |
+| GET    | `/api/admin/settings`             | Settings page data                               |
+| PUT    | `/api/admin/settings`             | Password rotation                                |
 
 ### `middleware.ts`
 
@@ -384,11 +414,12 @@ via `execFile` (no shell interpolation, no user input in `--repo` etc.).
 
 ### A. Regular restore (UI or CLI)
 
-**UI**: `/admin/backups` → pick snapshot → "Restore" → confirm in modal.
-The API runs `scripts/restore.sh <id>`, the page polls
-`/api/admin/backup/status` until the service is healthy, then reflects
-the new "last restored" time. Brief service downtime (~5–15s) is
-expected.
+**UI**: `/admin/backups` → pick snapshot → "Restore…" → type `RESTORE` in
+the modal. The API starts `scripts/restore.sh <id>` as a detached job; the
+page follows the phase log (`downloading → verifying → swapping →
+restarting`) and briefly loses its connection while the service restarts
+(~5–15s downtime), then recovers automatically and shows the result. A
+"dry-run first" option is offered in the modal.
 
 **CLI** (inside the CT):
 
@@ -556,27 +587,37 @@ Requirements on your machine: Docker (or OrbStack / colima), `sqlite3`,
 docs/BACKUPS.md                    # this document
 scripts/backup.sh                  # backup logic (runs as kindred)
 scripts/restore.sh                 # restore logic (runs as kindred, sudoers-wlist for service ctl)
+scripts/run-job.sh                 # named background-job wrapper (status JSON + log + lock)
 scripts/dev-backup.sh              # local MinIO round-trip test
 scripts/dev-restore-test.sh        # local MinIO disaster-recovery simulation
 scripts/setup-auth.sh              # mints AUTH_SECRET + setup-token inside the CT
+scripts/install-backup-prereqs.sh  # sudo/sqlite3 + sudoers rule + perms repair (idempotent)
+scripts/configure-backup-privileged.js  # writes /etc/kindred/*, restic init, systemd units (via sudo)
 proxmox/enable-backup-lxc.sh       # install restic + backup.env + sudoers + systemd
 systemd/kindred-backup.service     # committed; copied into CT by enable-backup-lxc.sh
 systemd/kindred-backup.timer       # committed; copied into CT by enable-backup-lxc.sh
 docker/minio-compose.yml           # local test harness
 lib/auth.ts                        # argon2 verify, cookie sign/verify, session helpers
 lib/db.ts                          # +getSettings() / setSetting() / isFirstRun()
+lib/backup-runner.ts               # restic wrappers + backup.env parsing (cache-invalidateable)
+lib/backup-jobs.ts                 # job manager: startJob/getJob/log tail, pid-liveness
 app/setup/page.tsx                 # the 3-step wizard
 app/api/setup/route.ts             # POST = complete setup (gated by empty DB + X-Setup-Token)
 app/admin/layout.tsx               # auth gate + nav
 app/admin/login/page.tsx           # login form
-app/admin/backups/page.tsx         # status, snapshot table, restore UI
+app/admin/backups/page.tsx         # status cards, jobs, snapshot table, restore/download/delete UI
+app/admin/backups/BackupsClient.tsx
+app/admin/backups/EnableBackupsForm.tsx
+app/admin/backups/ConfirmModal.tsx
 app/admin/settings/page.tsx        # password rotation
 app/api/admin/login/route.ts
 app/api/admin/logout/route.ts
-app/api/admin/backup/route.ts                 # POST = trigger backup
+app/api/admin/backup/route.ts                 # POST = start backup job, GET = poll
+app/api/admin/backup/check/route.ts           # POST = start integrity check job, GET = poll
 app/api/admin/backup/status/route.ts
-app/api/admin/backup/snapshots/route.ts
-app/api/admin/backup/restore/route.ts
+app/api/admin/backup/snapshots/route.ts       # GET = list, DELETE = forget+prune
+app/api/admin/backup/restore/route.ts         # POST = start restore job, GET = poll (restart-flip)
+app/api/admin/backup/download/route.ts        # GET = stream decrypted snapshot DB
 app/api/admin/backup/enable/route.ts
 app/api/admin/backup/config/route.ts
 app/api/admin/settings/route.ts

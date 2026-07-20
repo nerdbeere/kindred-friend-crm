@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile } from "fs/promises";
 import { isAuthenticated, isSameOrigin } from "@/lib/auth";
-import { loadBackupEnv } from "@/lib/backup-runner";
+import { loadBackupEnv, invalidateBackupEnvCache } from "@/lib/backup-runner";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,5 +108,6 @@ export async function PUT(request: NextRequest) {
     );
   }
 
+  invalidateBackupEnvCache();
   return NextResponse.json({ ok: true, keep_daily: newDaily, keep_weekly: newWeekly, keep_monthly: newMonthly, check_weekly: newCheck });
 }

@@ -49,6 +49,17 @@ chown root:root "$SUDOERS_FILE"
 log "Validating sudoers syntax ..."
 visudo -cf "$SUDOERS_FILE" >/dev/null || die "visudo check failed for $SUDOERS_FILE"
 
+# Repair permissions on existing config files. Older installers wrote these
+# 0600 root:kindred, which the kindred user CANNOT read — breaking the
+# app's status endpoint and ad-hoc restic runs. They must be group-readable.
+for f in /etc/kindred/backup.env /etc/kindred/restic.pass; do
+  if [ -f "$f" ]; then
+    chown root:"$KINDRED_USER" "$f"
+    chmod 0640 "$f"
+    log "Repaired perms on $f (0640 root:$KINDRED_USER)"
+  fi
+done
+
 log "Backup prerequisites installed OK."
 echo "  - sudo: $(sudo -V | head -n1)"
 echo "  - sqlite3: $(sqlite3 --version | awk '{print $1}')"

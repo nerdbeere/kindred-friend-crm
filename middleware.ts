@@ -30,6 +30,10 @@ export const runtime = "nodejs";
 const ADMIN_PATHS = ["/admin", "/api/admin"];
 const OPEN_API_PATHS = ["/api/contacts", "/api/feed", "/api/setup"];
 const OPEN_PAGES = ["/", "/setup"];
+// The login page + login API must stay reachable WITHOUT a session —
+// otherwise an expired cookie could never be replaced (and /admin/login
+// would redirect onto itself).
+const OPEN_AUTH_PATHS = ["/admin/login", "/api/admin/login"];
 
 function startsWithAny(path: string, prefixes: string[]): boolean {
   return prefixes.some((p) => path === p || path.startsWith(p + "/"));
@@ -38,7 +42,11 @@ function startsWithAny(path: string, prefixes: string[]): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (OPEN_PAGES.includes(pathname) || startsWithAny(pathname, OPEN_API_PATHS)) {
+  if (
+    OPEN_PAGES.includes(pathname) ||
+    OPEN_AUTH_PATHS.includes(pathname) ||
+    startsWithAny(pathname, OPEN_API_PATHS)
+  ) {
     return NextResponse.next();
   }
   if (!startsWithAny(pathname, ADMIN_PATHS)) {

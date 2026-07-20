@@ -68,6 +68,34 @@ emit_status() {
     | logger -t kindred-restore 2>/dev/null || true
 }
 
+# --- Job-file progress (UI-triggered restores) -------------------------------
+# When the admin API spawns us, it sets KINDRED_JOB_FILE to the restore
+# job's status file. We overwrite it at each phase so the UI can follow
+# progress — crucially including "restarting", written JUST BEFORE the
+# `systemctl restart` that kills this script (we're in the service's
+# cgroup). The API treats a dead pid + state "restarting" as expected.
+JOB_FILE="${KINDRED_JOB_FILE:-}"
+write_job() {
+  # write_job <state> <phase> [error]
+  [ -n "$JOB_FILE" ] || return 0
+  local state="$1" phase="$2" error="${3:-}"
+  local tmp="$JOB_FILE.tmp.$$"
+  {
+    printf '{"state":"%s","phase":"%s","pid":%s,"started_at":"%s",' \
+      "$state" "$phase" "$$" "${JOB_STARTED_AT:-$(date -u +%FT%TZ)}"
+    case "$state" in
+      ok|error) printf '"finished_at":"%s",' "$(date -u +%FT%TZ)" ;;
+      *)        printf '"finished_at":null,' ;;
+    esac
+    if [ -n "$error" ]; then
+      printf '"exit_code":1,"error":"%s"}\n' "$error"
+    else
+      printf '"exit_code":null,"error":null}\n'
+    fi
+  } > "$tmp" 2>/dev/null && mv -f "$tmp" "$JOB_FILE" 2>/dev/null || true
+}
+JOB_STARTED_AT="$(date -u +%FT%TZ)"
+
 # --- Preflight --------------------------------------------------------------
 [ -n "$BACKUP_S3_ENDPOINT" ]   || die "BACKUP_S3_ENDPOINT unset" 2
 [ -n "$BACKUP_S3_BUCKET" ]     || die "BACKUP_S3_BUCKET unset" 2
@@ -97,13 +125,15 @@ export RESTIC_REPOSITORY="s3:${ENDPOINT_NO_SLASH}/${BACKUP_S3_BUCKET}/${PREFIX_N
 export AWS_REGION="${BACKUP_S3_REGION:-us-east-1}"
 
 # Resolve "latest" to a concrete id so we can log it.
+# `restic snapshots --latest 1` does the newest-pick server-side — parsing
+# the full list by hand picked the OLDEST snapshot (restic sorts oldest
+# first), which was a real bug.
 if [ "$SNAPSHOT_ID" = "latest" ]; then
   log "Resolving 'latest' snapshot ..."
-  RESOLVE_OUT="$(restic snapshots --json 2>/dev/null || true)"
-  if [ -z "$RESOLVE_OUT" ] || [ "$RESOLVE_OUT" = "null" ]; then
+  RESOLVE_OUT="$(restic snapshots --json --latest 1 2>/dev/null || true)"
+  if [ -z "$RESOLVE_OUT" ] || [ "$RESOLVE_OUT" = "null" ] || [ "$RESOLVE_OUT" = "[]" ]; then
     die "no snapshots in repository — nothing to restore" 6
   fi
-  # Pick the snapshot with the largest "time" field (lexicographic works for ISO8601).
   SNAPSHOT_ID="$(printf '%s\n' "$RESOLVE_OUT" \
     | grep -oE '"(short_id|id)":"[a-f0-9]+"' \
     | head -n1 | cut -d'"' -f4 || true)"
@@ -114,16 +144,19 @@ fi
 # --- Dry-run path: restore into a temp dir, do NOT touch the live DB ---------
 if [ "$DRY_RUN" = "1" ]; then
   TMPDIR="${DRY_RUN_TARGET:-$(mktemp -d -t kindred-restore-dryrun.XXXXXX)}"
+  write_job running dry-run
   log "DRY RUN: restoring snapshot $SNAPSHOT_ID into $TMPDIR"
   RESTORE_OWNED=0
   if [ -n "$DRY_RUN_TARGET" ]; then
     mkdir -p "$TMPDIR"
   fi
   if ! restic restore "$SNAPSHOT_ID" --target "$TMPDIR" >/dev/null 2>&1; then
+    write_job error dry-run "dry-run restore failed"
     die "dry-run restore failed" 7
   fi
   RESTORED_DB="$(find "$TMPDIR" -name 'snapshot.db' -print -quit || true)"
   if [ -z "$RESTORED_DB" ]; then
+    write_job error dry-run "snapshot has no snapshot.db"
     die "snapshot has no snapshot.db — restore target: $TMPDIR" 7
   fi
   if [ -f "$DATABASE_PATH" ]; then
@@ -137,30 +170,36 @@ if [ "$DRY_RUN" = "1" ]; then
   fi
   log "DRY RUN: files restored under $TMPDIR (review and delete manually)"
   emit_status dry-run "$SNAPSHOT_ID" ""
+  write_job ok dry-run
   exit 0
 fi
 
 # --- Real restore: prepare temp dir ----------------------------------------
+write_job running downloading
 RESTORE_DIR="$(mktemp -d -t kindred-restore.XXXXXX)"
 trap 'rm -rf "$RESTORE_DIR"' EXIT
 log "Restoring snapshot $SNAPSHOT_ID into $RESTORE_DIR ..."
 if ! restic restore "$SNAPSHOT_ID" --target "$RESTORE_DIR" >/dev/null 2>&1; then
   emit_status error "$SNAPSHOT_ID" "restic restore failed"
+  write_job error downloading "restic restore failed"
   die "restic restore failed for snapshot $SNAPSHOT_ID" 7
 fi
 RESTORED_DB="$(find "$RESTORE_DIR" -name 'snapshot.db' -print -quit || true)"
-[ -n "$RESTORED_DB" ] || { emit_status error "$SNAPSHOT_ID" "snapshot has no snapshot.db"; die "snapshot has no snapshot.db (target: $RESTORE_DIR)" 7; }
+[ -n "$RESTORED_DB" ] || { emit_status error "$SNAPSHOT_ID" "snapshot has no snapshot.db"; write_job error downloading "snapshot has no snapshot.db"; die "snapshot has no snapshot.db (target: $RESTORE_DIR)" 7; }
 
 # Quick sanity: is it a real SQLite file?
+write_job running verifying
 sqlite3 "$RESTORED_DB" "PRAGMA integrity_check;" >/tmp/.kindred-restore-integrity.$$ 2>&1 || {
   cat /tmp/.kindred-restore-integrity.$$ >&2
   rm -f /tmp/.kindred-restore-integrity.$$
   emit_status error "$SNAPSHOT_ID" "integrity_check failed"
+  write_job error verifying "integrity_check failed"
   die "restored snapshot failed integrity_check — refusing to swap" 7
 }
 rm -f /tmp/.kindred-restore-integrity.$$
 
 # --- If live DB exists, move it aside (keep last 3 pre-restore copies) ------
+write_job running swapping
 PRE_RESTORE_COPY=""
 if [ -f "$DATABASE_PATH" ]; then
   TS="$(date +%s)"
@@ -177,6 +216,7 @@ fi
 log "Placing restored DB at $DATABASE_PATH ..."
 mv "$RESTORED_DB" "$DATABASE_PATH" || {
   emit_status error "$SNAPSHOT_ID" "atomic mv failed"
+  write_job error swapping "atomic mv failed"
   if [ -n "$PRE_RESTORE_COPY" ]; then
     warn "mv failed — rolling back to $PRE_RESTORE_COPY ..."
     mv "$PRE_RESTORE_COPY" "$DATABASE_PATH" || true
@@ -190,6 +230,12 @@ fi
 chmod 0640 "$DATABASE_PATH"
 
 # --- Restart service + health check ----------------------------------------
+# IMPORTANT: when this script was spawned by the admin API, we run inside
+# kindred.service's cgroup — the restart below SIGTERMs us. Write the
+# "restarting" phase BEFORE issuing it so the UI knows the swap already
+# happened and the downtime is expected. The health check + rollback below
+# still run for CLI-triggered restores (root shell, own cgroup).
+write_job restarting restarting
 log "Restarting $SERVICE_NAME ..."
 if command -v systemctl >/dev/null 2>&1; then
   # Use the sudoers-whitelisted command.
@@ -212,6 +258,7 @@ done
 
 if [ "$HEALTH_OK" != "1" ]; then
   warn "App did not come up after restore — rolling back ..."
+  write_job running rollback "health check failed, rolling back"
   if [ -n "$PRE_RESTORE_COPY" ] && [ -f "$PRE_RESTORE_COPY" ]; then
     rm -f "$DATABASE_PATH"
     mv "$PRE_RESTORE_COPY" "$DATABASE_PATH"
@@ -221,9 +268,11 @@ if [ "$HEALTH_OK" != "1" ]; then
       sudo /bin/systemctl restart "$SERVICE_NAME" 2>/dev/null || systemctl restart "$SERVICE_NAME" 2>/dev/null || true
     fi
     emit_status rollback "$SNAPSHOT_ID" "health check failed, rolled back"
+    write_job error rollback "health check failed, rolled back"
     die "app did not come up — rolled back to pre-restore DB ($DATABASE_PATH)" 8
   else
     emit_status error "$SNAPSHOT_ID" "health check failed, no pre-restore copy"
+    write_job error rollback "health check failed, no pre-restore copy"
     die "app did not come up and no pre-restore copy found — service may be down, investigate" 8
   fi
 fi
@@ -239,4 +288,5 @@ if [ -f "/opt/kindred/scripts/print-feed-token.js" ]; then
   fi
 fi
 emit_status ok "$SNAPSHOT_ID" ""
+write_job ok done
 exit 0

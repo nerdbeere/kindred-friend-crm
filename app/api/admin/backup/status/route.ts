@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
 import { loadBackupEnv, resticStats, resticSnapshots, runBinSync } from "@/lib/backup-runner";
+import { getJob } from "@/lib/backup-jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,9 +58,23 @@ export async function GET(request: NextRequest) {
     // ignore — status endpoint stays useful even if restic is unreachable
   }
 
+  // Background job states let the UI resume polling after a page reload.
+  const [backupJob, checkJob, restoreJob] = await Promise.all([getJob("backup"), getJob("check"), getJob("restore")]);
+
   return NextResponse.json({
     configured: true,
     repository: env.RESTIC_REPOSITORY,
+    endpoint: env.BACKUP_S3_ENDPOINT || null,
+    bucket: env.BACKUP_S3_BUCKET || null,
+    prefix: env.BACKUP_S3_PREFIX || null,
+    region: env.BACKUP_S3_REGION || null,
+    schedule: "daily 03:00 (10m randomized delay)",
+    retention: {
+      keep_daily: env.BACKUP_KEEP_DAILY || "7",
+      keep_weekly: env.BACKUP_KEEP_WEEKLY || "4",
+      keep_monthly: env.BACKUP_KEEP_MONTHLY || "6",
+      check_weekly: env.BACKUP_CHECK_WEEKLY || "1",
+    },
     last_backup: lastBackupJson
       ? {
           ts: lastBackupJson.ts || null,
@@ -77,5 +92,10 @@ export async function GET(request: NextRequest) {
     repo_size_bytes: stats?.total_size ?? null,
     file_count: stats?.total_file_count ?? null,
     snapshots: Array.isArray(snapshots) ? snapshots.length : 0,
+    jobs: {
+      backup: backupJob,
+      check: checkJob,
+      restore: restoreJob,
+    },
   });
 }

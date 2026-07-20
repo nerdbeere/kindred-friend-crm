@@ -147,9 +147,11 @@ if (!resticPass) {
   }
 }
 try {
-  fs.writeFileSync(resticPassPath, resticPass + "\n", { mode: 0o600 });
+  // 0640 root:kindred — restic runs as the kindred user (timer + ad-hoc
+  // UI-triggered backups) and must be able to READ the password file.
+  fs.writeFileSync(resticPassPath, resticPass + "\n", { mode: 0o640 });
   fs.chownSync(resticPassPath, 0, kgid);
-  fs.chmodSync(resticPassPath, 0o600);
+  fs.chmodSync(resticPassPath, 0o640);
 } catch (e) {
   fail(`failed to write restic.pass: ${e.message}`);
 }
@@ -177,9 +179,11 @@ const backupEnv = [
 
 const backupEnvPath = path.join(ETC_DIR, "backup.env");
 try {
-  fs.writeFileSync(backupEnvPath, backupEnv, { mode: 0o600 });
+  // 0640 root:kindred — the Next.js app (kindred user) reads this via
+  // lib/backup-runner.ts, and ad-hoc backup.sh runs source it directly.
+  fs.writeFileSync(backupEnvPath, backupEnv, { mode: 0o640 });
   fs.chownSync(backupEnvPath, 0, kgid);
-  fs.chmodSync(backupEnvPath, 0o600);
+  fs.chmodSync(backupEnvPath, 0o640);
 } catch (e) {
   fail(`failed to write backup.env: ${e.message}`);
 }

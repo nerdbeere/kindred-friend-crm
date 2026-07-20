@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { join } from "path";
 import { isAuthenticated, isSameOrigin } from "@/lib/auth";
 import { loadBackupEnv } from "@/lib/backup-runner";
 import { getJob, readJobLogTail, startJob } from "@/lib/backup-jobs";
@@ -7,14 +6,11 @@ import { getJob, readJobLogTail, startJob } from "@/lib/backup-jobs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const JOB_NAME = "backup";
-const BACKUP_SCRIPT = join(process.cwd(), "scripts", "backup.sh");
+const JOB_NAME = "check";
 
 /**
- * POST — start an ad-hoc backup as a detached background job running
- * scripts/backup.sh. Returns 202 immediately; the client polls GET for
- * progress. The script reads /etc/kindred/backup.env itself; we pass the
- * parsed env along too so it works when the file isn't sourceable.
+ * POST — start `restic check --read-data-subset=5%` as a background job.
+ * Read-only: verifies repository structure + samples 5% of pack data.
  */
 export async function POST(request: NextRequest) {
   if (!(await isAuthenticated(request))) {
@@ -29,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Backups are not configured." }, { status: 409 });
   }
 
-  const result = await startJob(JOB_NAME, ["bash", BACKUP_SCRIPT], env);
+  const result = await startJob(JOB_NAME, ["restic", "check", "--read-data-subset=5%"], env);
   if (!result.started) {
     const status = result.reason.includes("already") ? 409 : 500;
     return NextResponse.json({ ok: false, error: result.reason }, { status });
@@ -37,7 +33,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, started: true, pid: result.pid }, { status: 202 });
 }
 
-/** GET — current job state + log tail for the UI's polling loop. */
+/** GET — current check job state + log tail. */
 export async function GET(request: NextRequest) {
   if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
