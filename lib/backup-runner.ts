@@ -130,6 +130,29 @@ export async function resticStats(): Promise<{ total_size?: number; total_file_c
 }
 
 /**
+ * Remove stale repository locks (`restic unlock`). A lock survives its
+ * holder being killed (job timeout, OOM, server restart mid-operation) and
+ * then blocks every subsequent backup/check/restore with "repository is
+ * already locked" until someone removes it.
+ *
+ * DANGER: restic's `unlock` does NOT verify that the lock's owning process
+ * is actually dead — calling it while a restic operation is genuinely in
+ * flight (ours or anyone else's against the same repo) removes the lock
+ * out from under it and can corrupt that operation. Callers MUST ensure no
+ * tracked job is active before calling this; see the /unlock route.
+ */
+export async function resticUnlock(): Promise<{ ok: boolean; output: string; error?: string }> {
+  const env = await loadBackupEnv();
+  if (!env.RESTIC_REPOSITORY) return { ok: false, output: "", error: "not configured" };
+  const r = await runBin("restic", ["unlock"], env, 30000);
+  const output = (r.stdout || r.stderr || "").trim();
+  if (!r.ok) {
+    return { ok: false, output, error: output || `exit ${r.exitCode}` };
+  }
+  return { ok: true, output };
+}
+
+/**
  * Delete a snapshot and prune unreferenced data. Blocking (no service
  * impact — restic locks are per-repo and short-lived here).
  */

@@ -86,6 +86,12 @@ function isActive(job: JobState | undefined | null): boolean {
   return job?.state === "running" || job?.state === "restarting";
 }
 
+/** True when a job's error/log suggests a stale restic repository lock. */
+function looksLocked(job: JobState | undefined | null, log: string | undefined): boolean {
+  const haystack = `${job?.error ?? ""} ${log ?? ""}`;
+  return /already locked|unable to create lock/i.test(haystack);
+}
+
 /** Active, or finished within the last 10 minutes — worth showing in the UI. */
 function isRelevant(job: JobState | undefined | null): boolean {
   if (!job || job.state === "idle") return false;
@@ -131,6 +137,8 @@ export default function BackupsClient() {
   const [message, setMessage] = useState<string | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [unlockConfirm, setUnlockConfirm] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
   const [modalBusy, setModalBusy] = useState(false);
   const logRefs = useRef<Record<JobKind, HTMLPreElement | null>>({ backup: null, check: null, restore: null });
 
@@ -283,6 +291,23 @@ export default function BackupsClient() {
     }
   }
 
+  async function unlockRepository() {
+    setUnlocking(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/backup/unlock", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setUnlockConfirm(false);
+      setMessage(data.output ? `Unlock: ${data.output}` : "Repository unlocked.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   /* -------------------------------------------------------------- render */
 
   if (loading) {
@@ -358,9 +383,29 @@ export default function BackupsClient() {
         <Button type="button" variant="secondary" onClick={() => void refresh()}>
           Refresh
         </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setUnlockConfirm(true)}
+          disabled={isActive(jobs.backup) || isActive(jobs.check) || isActive(jobs.restore)}
+          className="border-amber-300 text-amber-800 hover:bg-amber-50"
+          title="Clear a stale repository lock left by a killed or interrupted job"
+        >
+          Unlock repository…
+        </Button>
         {isRelevant(jobs.backup) && !isActive(jobs.backup) && <JobBadge job={jobs.backup} />}
         {isRelevant(jobs.check) && !isActive(jobs.check) && <JobBadge job={jobs.check} />}
       </div>
+
+      {(looksLocked(jobs.backup, logs.backup) || looksLocked(jobs.check, logs.check) || looksLocked(jobs.restore, logs.restore)) && (
+        <Alert tone="danger">
+          This looks like a stale repository lock (left by a killed or interrupted job) — use{" "}
+          <button type="button" onClick={() => setUnlockConfirm(true)} className="underline">
+            Unlock repository
+          </button>{" "}
+          above, then retry.
+        </Alert>
+      )}
 
       {message && <Alert tone="success">{message}</Alert>}
       {error && <Alert tone="danger">{error}</Alert>}
@@ -514,6 +559,25 @@ export default function BackupsClient() {
           <p>
             The snapshot is removed and its unreferenced data pruned from the repository. This cannot be undone.
             Other snapshots are not affected.
+          </p>
+        </ConfirmModal>
+      )}
+
+      {unlockConfirm && (
+        <ConfirmModal
+          title="Unlock the backup repository?"
+          phrase="UNLOCK"
+          confirmLabel="Remove lock"
+          busy={unlocking}
+          onConfirm={() => void unlockRepository()}
+          onCancel={() => setUnlockConfirm(false)}
+        >
+          <p>
+            Only do this if a backup, check, or restore was killed or interrupted and left the repository
+            locked (error: <em>&quot;repository is already locked&quot;</em>). This page has confirmed none
+            of Kindred&apos;s own jobs are currently running — but restic cannot tell whether the lock&apos;s
+            owning process is truly dead, so removing it while an operation is genuinely still in progress
+            (here or from another machine using the same repository) can corrupt that operation.
           </p>
         </ConfirmModal>
       )}

@@ -382,6 +382,7 @@ journalctl -u kindred-backup.service -n 50
   - **Download** → `GET /api/admin/backup/download?snapshot=<id>` streams the decrypted `snapshot.db` as a file. Read-only.
   - **Delete…** → typed-confirmation modal (phrase `DELETE`) → `DELETE /api/admin/backup/snapshots` (`restic forget --prune`).
 - When backups aren't configured, the page renders an inline **enable form** (→ `POST /api/admin/backup/enable`) instead of the cards.
+- **Unlock repository…** → typed-confirmation modal (phrase `UNLOCK`) → `POST /api/admin/backup/unlock` (`restic unlock`). Clears a stale repository lock left by a killed/interrupted job. Disabled while any of our own jobs are active, and the route independently refuses if it detects one running — but `restic unlock` cannot verify a lock's owning process is actually dead, so removing it while an operation is genuinely still in progress (here or from another machine against the same repository) can corrupt that operation. A banner auto-surfaces the button when a job's log mentions "already locked".
 
 ### Background jobs
 
@@ -420,6 +421,7 @@ via `execFile` (no shell interpolation, no user input in `--repo` etc.).
 | POST   | `/api/admin/backup/restore`       | Body `{ snapshot, confirm:"RESTORE", dry_run? }` — starts async restore job |
 | GET    | `/api/admin/backup/restore`       | Restore job state + log tail (restart-flip)      |
 | GET    | `/api/admin/backup/download`      | `?snapshot=<id|latest>` — stream decrypted DB    |
+| POST   | `/api/admin/backup/unlock`        | `restic unlock` — clears a stale repo lock; refuses if any of our jobs are active |
 | POST   | `/api/admin/backup/enable`        | Wraps `enable-backup-lxc.sh` (sudoers-wlisted)   |
 | GET    | `/api/admin/backup/config`        | Current retention schedule                       |
 | PUT    | `/api/admin/backup/config`        | Update retention (writes `backup.env`)           |
@@ -645,6 +647,7 @@ app/api/admin/backup/status/route.ts
 app/api/admin/backup/snapshots/route.ts       # GET = list, DELETE = forget+prune
 app/api/admin/backup/restore/route.ts         # POST = start restore job, GET = poll (restart-flip)
 app/api/admin/backup/download/route.ts        # GET = stream decrypted snapshot DB
+app/api/admin/backup/unlock/route.ts          # POST = restic unlock (refuses if a job is active)
 app/api/admin/backup/enable/route.ts
 app/api/admin/backup/config/route.ts
 app/api/admin/settings/route.ts
