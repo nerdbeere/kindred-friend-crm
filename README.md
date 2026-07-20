@@ -146,7 +146,9 @@ Authorization: Bearer <feed-token>
 | `PUT /api/agent/contacts/<id>`              | Full-replacement update                       |
 | `DELETE /api/agent/contacts/<id>`           | Delete permanently                            |
 
-Reads include a computed `days_until` field. Example:
+Reads include a computed `days_until` field. Full interactive docs (with
+copy-paste curl examples pre-filled with your token and host) are served by
+the app itself at **`/api-docs`**. Example:
 
 ```bash
 TOKEN=$(npm run -s print:feed-token)
@@ -186,6 +188,7 @@ app/
   api/feed/[token]/route.ts     # ICS feed (token-gated, .ics suffix stripped)
   api/agent/contacts/route.ts   # agent API: list/search/upcoming, create
   api/agent/contacts/[id]/route.ts  # agent API: get, update, delete
+  api-docs/                     # in-app agent API documentation page
 lib/
   db.ts                          # better-sqlite3 singleton (WAL), schema, token
   contacts.ts                    # CRUD, validation, upcoming-birthday sort

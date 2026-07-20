@@ -13,7 +13,15 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="text-3xl font-semibold tracking-tight">Kindred</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-3xl font-semibold tracking-tight">Kindred</h1>
+        <a
+          href="/api-docs"
+          className="text-sm text-stone-500 hover:text-stone-800"
+        >
+          Agent API &rarr;
+        </a>
+      </div>
       <p className="mt-1 text-sm text-stone-500">
         Your people, their birthdays, one calendar feed.
       </p>
