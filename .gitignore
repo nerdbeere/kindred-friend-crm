@@ -10,3 +10,4 @@ next-env.d.ts
 .dev-restore-test/
 data/*.pre-restore.*
 proxmox/*.local.env
+tsconfig.tsbuildinfo
