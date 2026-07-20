@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminConfigured } from "@/lib/db";
 import { verifyAdminPassword, issueSessionCookie, isSameOrigin } from "@/lib/auth";
+import { isSecureRequest } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -48,7 +49,10 @@ export async function POST(request: NextRequest) {
     value: cookie.value,
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // Secure only when the request arrived via HTTPS — LAN installs run
+    // over plain HTTP, where browsers drop Secure cookies (login would
+    // silently never stick). See lib/session.ts isSecureRequest.
+    secure: isSecureRequest(request),
     path: "/",
     maxAge: cookie.maxAge,
   });

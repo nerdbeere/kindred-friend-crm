@@ -603,13 +603,14 @@ lib/backup-runner.ts               # restic wrappers + backup.env parsing (cache
 lib/backup-jobs.ts                 # job manager: startJob/getJob/log tail, pid-liveness
 app/setup/page.tsx                 # the 3-step wizard
 app/api/setup/route.ts             # POST = complete setup (gated by empty DB + X-Setup-Token)
-app/admin/layout.tsx               # auth gate + nav
-app/admin/login/page.tsx           # login form
-app/admin/backups/page.tsx         # status cards, jobs, snapshot table, restore/download/delete UI
-app/admin/backups/BackupsClient.tsx
-app/admin/backups/EnableBackupsForm.tsx
-app/admin/backups/ConfirmModal.tsx
-app/admin/settings/page.tsx        # password rotation
+app/admin/(authed)/layout.tsx      # auth gate + nav (route group: wraps ONLY authed pages)
+app/admin/(authed)/page.tsx        # /admin → /admin/backups
+app/admin/(authed)/backups/page.tsx         # status cards, jobs, snapshot table, restore/download/delete UI
+app/admin/(authed)/backups/BackupsClient.tsx
+app/admin/(authed)/backups/EnableBackupsForm.tsx
+app/admin/(authed)/backups/ConfirmModal.tsx
+app/admin/(authed)/settings/page.tsx        # password rotation
+app/admin/(auth)/login/page.tsx    # login form (outside the gate — else redirect loop)
 app/api/admin/login/route.ts
 app/api/admin/logout/route.ts
 app/api/admin/backup/route.ts                 # POST = start backup job, GET = poll

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile, unlink } from "fs/promises";
 import { isAdminConfigured, setSetting } from "@/lib/db";
 import { hashPassword, issueSessionCookie } from "@/lib/auth";
+import { isSecureRequest } from "@/lib/session";
 import { rateLimit } from "@/lib/rate-limit";
 import { applyBackupConfig } from "@/lib/backup-apply";
 
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
     value: cookie.value,
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(request),
     path: "/",
     maxAge: cookie.maxAge,
   });

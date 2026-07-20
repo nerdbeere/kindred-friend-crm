@@ -84,3 +84,18 @@ export function isSameOrigin(request: NextRequest): boolean {
     return false;
   }
 }
+
+/**
+ * Should the session cookie carry the `Secure` attribute for THIS request?
+ *
+ * Kindred is self-hosted and commonly reached over plain HTTP on a home
+ * network (http://192.168.x.x). Browsers silently DROP `Secure` cookies set
+ * over HTTP — so gating on NODE_ENV === "production" made logins never
+ * stick on LAN installs. Set Secure only when the request actually arrived
+ * via HTTPS (directly or behind a TLS-terminating proxy).
+ */
+export function isSecureRequest(request: NextRequest): boolean {
+  if (request.nextUrl.protocol === "https:") return true;
+  const fwd = request.headers.get("x-forwarded-proto");
+  return fwd?.split(",")[0]?.trim().toLowerCase() === "https";
+}
