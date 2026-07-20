@@ -55,7 +55,7 @@ pct status "$CT_ID" >/dev/null 2>&1 || die "Container $CT_ID not found or stoppe
 
 # --- Step 1: deps in CT -----------------------------------------------------
 log "[$CT_ID] Installing sqlite3 + ca-certificates ..."
-pct exec "$CT_ID" -- bash -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq sqlite3 ca-certificates'
+pct exec "$CT_ID" -- bash -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq sqlite3 ca-certificates sudo'
 
 # --- Step 2: install restic binary into CT ----------------------------------
 install_or_verify_restic() {
@@ -265,7 +265,8 @@ WantedBy=timers.target
 UNIT"
 
 # Sudoers whitelist — §6 of docs/BACKUPS.md.
-pct exec "$CT_ID" -- bash -c "cat > /etc/sudoers.d/kindred-backup <<'SUDOERS'
+pct exec "$CT_ID" -- bash -c "install -d -m 0750 -o root -g root /etc/sudoers.d
+cat > /etc/sudoers.d/kindred-backup <<'SUDOERS'
 # Managed by proxmox/enable-backup-lxc.sh
 # Allows the kindred backup job to stop/start/restart its own service for restores.
 kindred ALL=(root) NOPASSWD: /bin/systemctl restart kindred, /bin/systemctl stop kindred, /bin/systemctl start kindred

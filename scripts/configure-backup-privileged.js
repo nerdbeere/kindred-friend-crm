@@ -111,25 +111,30 @@ for (const k of ["endpoint", "bucket", "prefix", "region", "access_key_id", "sec
   if (dangerous.test(cfg[k])) fail(`field ${k} contains forbidden characters`);
 }
 
-// --- Write /etc/kindred/ ---------------------------------------------------
-try {
-  fs.mkdirSync(ETC_DIR, { recursive: true, mode: 0o750 });
-  fs.chownSync(ETC_DIR, 0, os.userInfo().gid); // root:kindred (kindred is the default gid)
-} catch (e) {
-  // fall through — /etc/kindred likely already exists
-}
-
-// Resolve kindred gid from /etc/passwd (more reliable than os.userInfo() under sudo).
-function kindredGid() {
+// Resolve kindred uid + gid from /etc/passwd. We run as root via sudo,
+// so os.userInfo() would return root's ids — useless for chowning files
+// that the kindred user needs to read.
+function kindredIds() {
   try {
     const passwd = fs.readFileSync("/etc/passwd", "utf8");
     const line = passwd.split("\n").find((l) => l.startsWith(`${KINDRED_USER}:`));
-    return line ? parseInt(line.split(":")[3], 10) : process.getgid();
-  } catch {
-    return process.getgid();
+    if (!line) throw new Error(`no passwd entry for ${KINDRED_USER}`);
+    const parts = line.split(":");
+    return { uid: parseInt(parts[2], 10), gid: parseInt(parts[3], 10) };
+  } catch (e) {
+    fail(`cannot resolve ${KINDRED_USER} uid/gid from /etc/passwd: ${e.message}`);
   }
 }
-const kgid = kindredGid();
+const { uid: kuid, gid: kgid } = kindredIds();
+
+// --- Write /etc/kindred/ ---------------------------------------------------
+try {
+  fs.mkdirSync(ETC_DIR, { recursive: true, mode: 0o750 });
+  // chown to root:kindred so the kindred user (group) can traverse + read.
+  fs.chownSync(ETC_DIR, 0, kgid);
+} catch (e) {
+  // fall through — /etc/kindred likely already exists
+}
 
 // restic.pass: preserve if exists, else generate.
 const resticPassPath = path.join(ETC_DIR, "restic.pass");
@@ -182,16 +187,7 @@ try {
 // Snapshot dir
 try {
   fs.mkdirSync("/var/lib/kindred-backup", { recursive: true, mode: 0o750 });
-  const kindredUid = (() => {
-    try {
-      const passwd = fs.readFileSync("/etc/passwd", "utf8");
-      const line = passwd.split("\n").find((l) => l.startsWith(`${KINDRED_USER}:`));
-      return line ? parseInt(line.split(":")[2], 10) : 0;
-    } catch {
-      return 0;
-    }
-  })();
-  fs.chownSync("/var/lib/kindred-backup", kindredUid, kgid);
+  fs.chownSync("/var/lib/kindred-backup", kuid, kgid);
 } catch (e) {
   // non-fatal
 }
@@ -300,11 +296,17 @@ kindred ALL=(root) NOPASSWD: /bin/systemctl restart kindred, /bin/systemctl stop
 `;
 
 try {
+  // The `sudo` package provides /etc/sudoers.d/. `mkdirSync` is a no-op
+  // if it already exists, and a sane default if it doesn't.
+  fs.mkdirSync(path.dirname(SUDOERS_DST), { recursive: true, mode: 0o750 });
   fs.writeFileSync(path.join(SYSTEMD_DST_DIR, "kindred-backup.service"), serviceUnit, { mode: 0o644 });
   fs.writeFileSync(path.join(SYSTEMD_DST_DIR, "kindred-backup.timer"), timerUnit, { mode: 0o644 });
   fs.writeFileSync(SUDOERS_DST, sudoersRule, { mode: 0o440 });
   fs.chownSync(SUDOERS_DST, 0, 0);
-  // Validate sudoers syntax
+  // Validate sudoers syntax (requires `sudo` to be installed — asserted below).
+  if (spawnSync("which", ["visudo"], { encoding: "utf8" }).status !== 0) {
+    fail("`visudo` not found — install the `sudo` package before running this helper");
+  }
   const visudo = spawnSync("visudo", ["-cf", SUDOERS_DST], { encoding: "utf8" });
   if (visudo.status !== 0) {
     fail(`sudoers file failed visudo check: ${(visudo.stderr || "").trim()}`);

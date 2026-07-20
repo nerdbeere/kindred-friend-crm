@@ -162,13 +162,13 @@ if [ "$SRC_SHA" = "$DST_SHA" ]; then
   PASS=1
 else
   warn "SHAs differ — verifying row-level equality (WAL checkpoint may reorder pages)..."
-  ROW_DIFF="$(sqlite3 "$RESTORED_DB" "SELECT name FROM contacts ORDER BY id;" | diff - <(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT name FROM contacts ORDER BY id;") | wc -l)"
-  TOKEN_DIFF="$(sqlite3 "$RESTORED_DB" "SELECT value FROM settings WHERE key='feed_token';" | diff - <(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT value FROM settings WHERE key='feed_token';") | wc -l)"
+  ROW_DIFF="$(sqlite3 "$RESTORED_DB" "SELECT name FROM contacts ORDER BY id;" | diff - <(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT name FROM contacts ORDER BY id;") | wc -l | tr -d '[:space:]')"
+  TOKEN_DIFF="$(sqlite3 "$RESTORED_DB" "SELECT value FROM settings WHERE key='feed_token';" | diff - <(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT value FROM settings WHERE key='feed_token';") | wc -l | tr -d '[:space:]')"
   if [ "$ROW_DIFF" = "0" ] && [ "$TOKEN_DIFF" = "0" ]; then
     log "Row-level + token verification passed."
     PASS=1
   else
-    die "Row-level verification FAILED — content differs."
+    die "Row-level verification FAILED — content differs (ROW_DIFF=$ROW_DIFF TOKEN_DIFF=$TOKEN_DIFF)."
   fi
 fi
 

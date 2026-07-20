@@ -94,6 +94,16 @@ SQL
 SRC_SHA="$(sha256sum "$DEV_DIR/data/kindred.db" | awk '{print $1}')"
 
 # --- Backup -----------------------------------------------------------------
+log "Initializing restic repo (idempotent) ..."
+set -a; . "$DEV_DIR/backup.env"; set +a
+ENDPOINT="${BACKUP_S3_ENDPOINT%/}"; PREFIX="${BACKUP_S3_PREFIX#/}"; PREFIX="${PREFIX%/}"
+export RESTIC_REPOSITORY="s3:${ENDPOINT}/${BACKUP_S3_BUCKET}/${PREFIX}"
+export RESTIC_PASSWORD_FILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION="${BACKUP_S3_REGION:-us-east-1}"
+if ! restic snapshots >/dev/null 2>&1; then
+  restic init || die "restic init failed"
+fi
+set +a
+
 log "Backing up ..."
 BACKUP_ENV_FILE="$DEV_DIR/backup.env" bash "$REPO_ROOT/scripts/backup.sh" || die "backup.sh failed"
 
@@ -128,13 +138,13 @@ if [ "$SRC_SHA" = "$DST_SHA" ]; then
   PASS=1
 else
   warn "SHAs differ — verifying row-level equality ..."
-  ROW_DIFF="$(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT name FROM contacts ORDER BY id;" | diff - <(printf 'Ada Lovelace\nAlan Turing\nGrace Hopper\n') | wc -l)"
+  ROW_DIFF="$(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT name FROM contacts ORDER BY id;" | diff - <(printf 'Ada Lovelace\nAlan Turing\nGrace Hopper\n') | wc -l | tr -d '[:space:]')"
   TOKEN="$(sqlite3 "$DEV_DIR/data/kindred.db" "SELECT value FROM settings WHERE key='feed_token';")"
   if [ "$ROW_DIFF" = "0" ] && [ "$TOKEN" = "dev-restore-test-token" ]; then
     log "Row-level + token verification passed."
     PASS=1
   else
-    die "Row-level verification FAILED — content differs."
+    die "Row-level verification FAILED — content differs (ROW_DIFF=$ROW_DIFF, TOKEN=[$TOKEN])."
   fi
 fi
 

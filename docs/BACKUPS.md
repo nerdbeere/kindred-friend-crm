@@ -498,30 +498,42 @@ the entire backup → encrypt → upload → restore → swap → health check
 flow before pointing it at a real S3 backend.
 
 ```bash
-# Bring up MinIO in Docker, seed a test DB, run backup + restore, assert
-# round-trip byte-equality, tear down:
+# Bring up MinIO in Docker, seed a test DB, run backup + dry-run restore,
+# assert row-level equality, tear down:
 npm run dev:backup-test
 
 # Simulate a freshly-provisioned container: delete the local DB, restore
-# from MinIO, verify the feed token survives:
+# from MinIO via bare `restic restore`, verify the feed token survives:
 npm run dev:restore-test
 ```
 
-What it does (`scripts/dev-backup.sh`):
+If ports 9000/9001 conflict on your machine, override them:
 
-1. `docker compose -f docker/minio-compose.yml up -d` — MinIO on `localhost:9000`, console `:9001`, ephemeral volume, bucket `kindred-test` pre-created by a `minio/mc` sidecar.
+```bash
+MINIO_PORT=9100 MINIO_CONSOLE_PORT=9101 npm run dev:backup-test
+MINIO_PORT=9100 MINIO_CONSOLE_PORT=9101 npm run dev:restore-test
+```
+
+What `scripts/dev-backup.sh` does:
+
+1. `docker compose -f docker/minio-compose.yml up -d` — MinIO on `localhost:$MINIO_PORT`, console on `:$MINIO_CONSOLE_PORT`, ephemeral volume, bucket `kindred-test` pre-created by a `minio/mc` sidecar.
 2. Writes throwaway creds to `.dev-backup/backup.env` and `.dev-backup/restic.pass` (both gitignored).
-3. Seeds a test SQLite DB with a few contacts + a feed token.
-4. Runs `scripts/backup.sh` with `BACKUP_*` env pointed at MinIO.
-5. Runs `scripts/restore.sh latest` against a fresh empty `data/` dir.
-6. Asserts the restored DB is byte-identical to the source.
-7. Prints a results table; non-zero exit on any failure.
-8. Tears down the compose stack.
+3. Initializes the restic repo (`restic init`) at `s3://localhost:$MINIO_PORT/kindred-test/kindred/dev-test`.
+4. Seeds a test SQLite DB with a few contacts + a feed token.
+5. Runs `scripts/backup.sh` with `BACKUP_*` env pointed at MinIO.
+6. Runs `scripts/restore.sh latest --dry-run --target .dev-backup/restore` to fetch + decrypt the snapshot without stopping any service.
+7. Asserts the restored DB is either byte-identical to the source OR row-identical plus token-identical (the byte-level SHA can differ because `sqlite3 .backup` produces a non-WAL snapshot while the live DB is in WAL mode — same logical content, different page layout).
+8. Prints a results table; non-zero exit on any failure.
+9. Tears down the compose stack.
 
-`scripts/dev-restore-test.sh` is the same but deletes the local DB
-between backup and restore to simulate disaster recovery.
+`scripts/dev-restore-test.sh` is the same shape but **deletes the local
+DB between backup and restore** to simulate a container-destroyed
+disaster, and uses bare `restic restore` (not `scripts/restore.sh`) so
+it doesn't depend on systemd or sudoers — proving the operator can
+recover on a fresh CT with only the saved restic password + S3 creds.
 
-Requirements on your machine: Docker (or OrbStack / colima), nothing else.
+Requirements on your machine: Docker (or OrbStack / colima), `sqlite3`,
+`restic` (`brew install restic` / `apt install restic`). Nothing else.
 
 ---
 
