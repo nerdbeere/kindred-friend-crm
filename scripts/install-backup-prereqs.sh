@@ -7,10 +7,9 @@
 #   * /etc/sudoers.d/             — created if missing
 #   * /etc/sudoers.d/kindred-configure-backup  — NOPASSWD rule for the helper
 #
-# This script is IDEMPOTENT and safe to re-run. It's called by
-# proxmox/setup-lxc.sh during initial provisioning, and can also be run
-# by hand on an existing CT to repair a partial install (e.g. a CT that
-# was provisioned before the sudoers.d fix):
+# This script is IDEMPOTENT and safe to re-run. It's a REQUIRED part of
+# proxmox/setup-lxc.sh initial provisioning, is also run by update.sh, and
+# can be run by hand on an existing CT to repair a partial install:
 #
 #   pct exec <CT_ID> -- bash /opt/kindred/scripts/install-backup-prereqs.sh
 #

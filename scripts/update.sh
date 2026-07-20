@@ -9,7 +9,8 @@
 #   pct exec <CT_ID> -- bash /opt/kindred/scripts/update.sh
 #   (or use proxmox/update-lxc.sh)
 #
-# Steps: git pull -> npm ci -> npm run build -> restart service -> health check.
+# Steps: git pull -> npm ci -> npm run build -> repair system prerequisites
+# -> restart service -> health check.
 # The SQLite database (data/) is not tracked by git and survives updates.
 # The ICS feed token is stored in the database, so the feed URL never changes.
 
@@ -38,6 +39,13 @@ as_app_user "npm ci --no-audit --no-fund"
 
 log "Building..."
 as_app_user "npm run build"
+
+log "Repairing auth and backup prerequisites..."
+# Idempotent repair for CTs provisioned by any older installer. In
+# particular, this rewrites/verifies the sudoers rule that the admin backup
+# UI requires and repairs auth.env's group-read mode for the lazy fallback.
+bash "$APP_DIR/scripts/setup-auth.sh" >/dev/null
+bash "$APP_DIR/scripts/install-backup-prereqs.sh"
 
 log "Restarting $SERVICE_NAME service..."
 systemctl restart "$SERVICE_NAME"
