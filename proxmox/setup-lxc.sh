@@ -42,6 +42,11 @@
 #   NODE_MAJOR    Node.js major version  (default: 22)
 #   DEPLOY_KEY    Path (on this host) to a private SSH key authorized
 #                 as a deploy key for the repo (SSH URLs only)
+#   ENABLE_BACKUP Set 1 to install restic + the sudoers rules + auth/env
+#                 files right after provisioning. Defaults to 0
+#                 (the first-run wizard handles it interactively).
+#                 When 1 and you supply BACKUP_S3_* + AWS_* env vars,
+#                 the wizard step 2 is pre-skipped.
 
 set -euo pipefail
 
@@ -60,6 +65,7 @@ BRANCH="${BRANCH:-main}"
 APP_PORT="${APP_PORT:-3000}"
 NODE_MAJOR="${NODE_MAJOR:-22}"
 DEPLOY_KEY="${DEPLOY_KEY:-}"
+ENABLE_BACKUP="${ENABLE_BACKUP:-0}"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -230,6 +236,8 @@ WorkingDirectory=/opt/kindred
 Environment=NODE_ENV=production
 Environment=HOSTNAME=0.0.0.0
 Environment=PORT=${APP_PORT}
+# Load /etc/kindred/auth.env (AUTH_SECRET for cookie signing) if present.
+EnvironmentFile=-/etc/kindred/auth.env
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5
@@ -251,6 +259,45 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+# --- Admin auth + setup token + sudoers rule for the wizard/UI -------------
+# Mint AUTH_SECRET (cookie signing key) and the one-time setup token the
+# operator pastes into the first-run wizard. Also install the sudoers rule
+# that lets the unprivileged kindred user invoke the privileged backup
+# config helper via sudo (used by the wizard's step 2 and /api/admin/backup/enable).
+bash /opt/kindred/scripts/setup-auth.sh >/dev/null 2>&1 || true
+
+# Sudoers whitelist: lets the kindred Next.js process invoke the privileged
+# backup-config helper. The helper validates its input file (path under
+# /tmp, owned by kindred, JSON schema) before touching /etc/kindred/*.
+cat > /etc/sudoers.d/kindred-configure-backup <<'SUDOERS'
+kindred ALL=(root) NOPASSWD: /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js
+SUDOERS
+chmod 0440 /etc/sudoers.d/kindred-configure-backup
+chown root:root /etc/sudoers.d/kindred-configure-backup
+visudo -cf /etc/sudoers.d/kindred-configure-backup >/dev/null
+
+# Optional: pre-install restic + backup config so the wizard's step 2 is
+# already done by the time the operator logs in.
+if [ "${ENABLE_BACKUP:-0}" = "1" ] && [ -n "${BACKUP_S3_ENDPOINT:-}" ] && [ -n "${BACKUP_S3_BUCKET:-}" ] && [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+  echo "===> ENABLE_BACKUP=1 + BACKUP_S3_* env vars set: pre-configuring backups ..."
+  CFG_TMP=/tmp/.kindred-backup-preconfig.json
+  cat > "$CFG_TMP" <<JSON
+{
+  "endpoint": "${BACKUP_S3_ENDPOINT}",
+  "bucket":   "${BACKUP_S3_BUCKET}",
+  "prefix":   "${BACKUP_S3_PREFIX:-kindred/$(hostname)}",
+  "region":   "${BACKUP_S3_REGION:-}",
+  "access_key_id":     "${AWS_ACCESS_KEY_ID}",
+  "secret_access_key": "${AWS_SECRET_ACCESS_KEY}",
+  "restic_password":   null
+}
+JSON
+  chmod 0600 "$CFG_TMP"
+  chown kindred:kindred "$CFG_TMP"
+  /usr/bin/node /opt/kindred/scripts/configure-backup-privileged.js "$CFG_TMP" || echo "WARN: pre-config failed — wizard will handle on first login" >&2
+  rm -f "$CFG_TMP"
+fi
+
 CONTAINER_EOF
 
 # --- Read results & print the feed URL ----------------------------------------
@@ -258,6 +305,9 @@ KINDRED_IP="$(pct exec "$CT_ID" -- hostname -I | awk '{print $1}')"
 KINDRED_TOKEN="$(pct exec "$CT_ID" -- su -s /bin/bash kindred -c 'node /opt/kindred/scripts/print-feed-token.js' | tr -d '[:space:]')"
 
 FEED_URL="http://${KINDRED_IP}:${APP_PORT}/api/feed/${KINDRED_TOKEN}.ics"
+
+# Read the one-time setup token that setup-auth.sh wrote into /etc/kindred/setup-token.
+SETUP_TOKEN="$(pct exec "$CT_ID" -- cat /etc/kindred/setup-token 2>/dev/null | tr -d '[:space:]' || true)"
 
 DEPLOY_NOTE=""
 if [ "$USE_SSH" -eq 1 ]; then
@@ -268,7 +318,7 @@ fi
 
 cat <<SUMMARY
 
-==============================================================
+=============================================================
  Kindred is deployed and running.
 
    Web UI:     http://${KINDRED_IP}:${APP_PORT}
@@ -276,12 +326,20 @@ cat <<SUMMARY
    Service:    systemctl status kindred   (inside the CT)
    Update:     ./proxmox/update-lxc.sh $CT_ID   (from this host)${DEPLOY_NOTE}
 
-   ICS feed URL — copy this into Home Assistant
-   (Settings -> Devices & Services -> Add Integration
-    -> "Remote Calendar" -> paste URL):
+ First-run setup — browse to the Web UI, you'll be redirected to /setup.
+ Paste this one-time setup token when prompted:
+
+   ${SETUP_TOKEN}
+
+ (the token is also saved at /etc/kindred/setup-token inside the CT and
+  is consumed the moment you complete the wizard)
+
+ ICS feed URL — copy this into Home Assistant
+ (Settings -> Devices & Services -> Add Integration
+  -> "Remote Calendar" -> paste URL):
 
    ${FEED_URL}
 
    Anyone with this URL can read the feed. Keep it secret.
-==============================================================
+=============================================================
 SUMMARY

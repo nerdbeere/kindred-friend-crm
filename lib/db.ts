@@ -33,6 +33,29 @@ export function getDb(): Database.Database {
   return globalForDb.db;
 }
 
+/** Read a settings row by key. Returns null if absent. */
+export function getSetting(key: string): string | null {
+  const row = getDb()
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+/** Upsert a settings row. Runs inside a transaction. */
+export function setSetting(key: string, value: string): void {
+  getDb()
+    .prepare(
+      "INSERT INTO settings (key, value) VALUES (?, ?) " +
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    )
+    .run(key, value);
+}
+
+/** True once an admin password hash exists in `settings`. Used by the setup wizard gate. */
+export function isAdminConfigured(): boolean {
+  return getSetting("admin_password_hash") !== null;
+}
+
 /**
  * Returns the secret ICS feed token. Uses the ICS_FEED_TOKEN env var when set,
  * otherwise generates one on first use and persists it in the settings table.

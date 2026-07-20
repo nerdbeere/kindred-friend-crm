@@ -4,3 +4,9 @@ data/
 *.log
 next-env.d.ts
 .DS_Store
+
+# Local backup/dev-test artifacts
+.dev-backup/
+.dev-restore-test/
+data/*.pre-restore.*
+proxmox/*.local.env

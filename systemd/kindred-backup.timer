@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Kindred backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=10m
+Unit=kindred-backup.service
+
+[Install]
+WantedBy=timers.target

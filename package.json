@@ -7,9 +7,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "print:feed-token": "node scripts/print-feed-token.js"
+    "print:feed-token": "node scripts/print-feed-token.js",
+    "dev:backup-test": "bash scripts/dev-backup.sh",
+    "dev:restore-test": "bash scripts/dev-restore-test.sh"
   },
   "dependencies": {
+    "@node-rs/argon2": "^1.4.0",
     "better-sqlite3": "^12.2.0",
     "ics": "^3.8.1",
     "next": "^15.3.4",

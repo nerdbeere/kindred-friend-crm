@@ -89,6 +89,33 @@ Inside the container: `bash /opt/kindred/scripts/update.sh` (run as root).
 The update flow: `git pull --ff-only` → `npm ci` → `npm run build` →
 `systemctl restart kindred` → health check → reprints the feed URL.
 
+## Backups & admin
+
+On first boot, browse to `http://<container-ip>:3000/` — the first-run
+wizard will let you set an admin password (+ optionally configure
+encrypted S3 backups) using the one-time **setup token** the installer
+printed on the console.
+
+- `/admin/*` requires login. The admin UI manages encrypted backups and
+  one-click restore; everything else (the contacts UI, the ICS feed) is
+  unchanged.
+- Encrypted backups use `restic` (client-side AES-256), backed by any
+  S3-compatible endpoint (B2, R2, AWS S3, MinIO, Wasabi, …). The S3
+  operator can only see ciphertext.
+- One-click restore via `/admin/backups` (with confirmation modal) or
+  `scripts/restore.sh latest` inside the container.
+
+Full backup/restore design, threat model, restore-from-scratch runbook,
+IAM policy templates, and a local MinIO test harness are documented in
+[`docs/BACKUPS.md`](docs/BACKUPS.md). Test the entire round-trip locally
+before pointing it at a real S3 backend:
+
+```bash
+npm install
+npm run dev:backup-test       # MinIO round-trip
+npm run dev:restore-test      # disaster-recovery simulation
+```
+
 ## Home Assistant integration
 
 1. Run the installer, copy the printed ICS URL

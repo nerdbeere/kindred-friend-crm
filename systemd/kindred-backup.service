@@ -1,0 +1,36 @@
+[Unit]
+Description=Kindred encrypted backup to S3
+Documentation=file:///opt/kindred/docs/BACKUPS.md
+After=network-online.target kindred.service
+Wants=network-online.target
+# Don't start if backups aren't configured.
+ConditionPathExists=/etc/kindred/backup.env
+
+[Service]
+Type=oneshot
+User=kindred
+Group=kindred
+EnvironmentFile=/etc/kindred/backup.env
+WorkingDirectory=/opt/kindred
+ExecStart=/usr/bin/env bash /opt/kindred/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/kindred-backup /opt/kindred/data
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+LockPersonality=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target
