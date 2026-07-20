@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SiteHeader from "./SiteHeader";
 
 export const metadata: Metadata = {
   title: "Kindred",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-stone-50 text-stone-900 antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <SiteHeader />
+        {children}
+      </body>
     </html>
   );
 }

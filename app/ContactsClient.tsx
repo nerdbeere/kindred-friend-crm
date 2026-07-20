@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 
 export interface ContactView {
   id: number;
@@ -88,6 +88,8 @@ function untilLabel(days: number): string {
   return `in ${days} days`;
 }
 
+type SortOption = "upcoming" | "name" | "birthday";
+
 export default function ContactsClient({
   initialContacts,
   feedPath,
@@ -102,6 +104,9 @@ export default function ContactsClient({
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortOption>("upcoming");
+  const deferredSearch = useDeferredValue(search);
 
   async function refresh() {
     const res = await fetch("/api/contacts", { cache: "no-store" });
@@ -182,39 +187,67 @@ export default function ContactsClient({
   }
 
   const inputClass =
-    "w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500";
+    "w-full rounded-xl border border-night/20 bg-white px-3 py-2.5 text-sm text-night shadow-sm outline-none transition placeholder:text-night/40 focus:border-sand-shadow focus:ring-2 focus:ring-sand/45";
+  const normalizedSearch = deferredSearch.trim().toLocaleLowerCase();
+  const visibleContacts = contacts
+    .filter((contact) => {
+      if (!normalizedSearch) return true;
+      return `${contact.name} ${contact.notes} ${birthdayLabel(contact)}`.toLocaleLowerCase().includes(normalizedSearch);
+    })
+    .sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+      if (sort === "birthday") return a.birth_month - b.birth_month || a.birth_day - b.birth_day || a.name.localeCompare(b.name);
+      return a.days_until - b.days_until || a.name.localeCompare(b.name);
+    });
+  const upcomingContacts = [...contacts].sort((a, b) => a.days_until - b.days_until).slice(0, 4);
 
   return (
-    <div className="mt-8 space-y-8">
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-        <h2 className="text-sm font-semibold text-amber-900">
-          Birthday calendar feed
-        </h2>
-        <p className="mt-1 text-xs text-amber-800">
-          Subscribe from Home Assistant, Google Calendar, or any calendar app.
-          Anyone with this URL can read the feed — keep it secret.
-        </p>
-        <div className="mt-2 flex items-center gap-2">
-          <code className="flex-1 truncate rounded bg-white px-2 py-1 text-xs text-stone-700 ring-1 ring-amber-200">
-            {feedPath}
-          </code>
-          <button
-            type="button"
-            onClick={copyFeedUrl}
-            className="shrink-0 rounded-md bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
-          >
-            {copied ? "Copied" : copyFailed ? "Copy failed — long-press/right-click to copy" : "Copy URL"}
-          </button>
+    <div className="mt-8 space-y-8 sm:mt-10">
+      <section className="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
+        <div className="rounded-2xl bg-night p-5 text-[#f8f2e9] shadow-lg shadow-night/15 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-sand">Birthday radar</p>
+              <h2 className="mt-1 text-2xl font-bold">Coming up soon</h2>
+            </div>
+            <span className="rounded-full bg-sand px-3 py-1 text-xs font-bold text-night">{contacts.length} people</span>
+          </div>
+          {upcomingContacts.length === 0 ? (
+            <p className="mt-8 text-sm text-[#f8f2e9]/70">Add your first person to start building your circle.</p>
+          ) : (
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              {upcomingContacts.map((contact) => (
+                <div key={contact.id} className="rounded-xl bg-white/10 px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-semibold">{contact.name}</span>
+                    <span className="shrink-0 text-xs font-bold text-sand">{untilLabel(contact.days_until)}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#f8f2e9]/70">{birthdayLabel(contact)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="rounded-2xl border border-sand-shadow/35 bg-sand/25 p-5 sm:p-6">
+          <h2 className="font-bold text-night">Birthday calendar</h2>
+          <p className="mt-1 text-sm leading-5 text-night/70">Use this private feed in your favorite calendar app.</p>
+          <div className="mt-4 flex gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-lg bg-white/80 px-2.5 py-2 text-xs text-night ring-1 ring-sand-shadow/20">{feedPath}</code>
+            <button type="button" onClick={copyFeedUrl} className="shrink-0 rounded-lg bg-night px-3 py-2 text-xs font-bold text-white transition hover:bg-night-shadow">
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          {copyFailed && <p className="mt-2 text-xs font-medium text-night">Copy failed. Long-press or right-click the URL to copy it.</p>}
         </div>
       </section>
 
-      <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold">
+      <section className="rounded-2xl border border-night/10 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-lg font-bold text-night">
           {editingId === null ? "Add a contact" : "Edit contact"}
         </h2>
-        <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
-            <label htmlFor="name" className="mb-1 block text-xs font-medium text-stone-600">
+            <label htmlFor="name" className="mb-1 block text-xs font-bold uppercase tracking-wide text-night/60">
               Name
             </label>
             <input
@@ -226,9 +259,9 @@ export default function ContactsClient({
               placeholder="Ada Lovelace"
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="col-span-1">
-              <label htmlFor="month" className="mb-1 block text-xs font-medium text-stone-600">
+              <label htmlFor="month" className="mb-1 block text-xs font-bold uppercase tracking-wide text-night/60">
                 Month
               </label>
               <select
@@ -249,7 +282,7 @@ export default function ContactsClient({
               </select>
             </div>
             <div>
-              <label htmlFor="day" className="mb-1 block text-xs font-medium text-stone-600">
+              <label htmlFor="day" className="mb-1 block text-xs font-bold uppercase tracking-wide text-night/60">
                 Day
               </label>
               <input
@@ -264,9 +297,9 @@ export default function ContactsClient({
                 placeholder="14"
               />
             </div>
-            <div>
-              <label htmlFor="year" className="mb-1 block text-xs font-medium text-stone-600">
-                Year <span className="text-stone-400">(optional)</span>
+            <div className="col-span-2 sm:col-span-1">
+              <label htmlFor="year" className="mb-1 block text-xs font-bold uppercase tracking-wide text-night/60">
+                Year <span className="text-night/40">(optional)</span>
               </label>
               <input
                 id="year"
@@ -281,7 +314,7 @@ export default function ContactsClient({
             </div>
           </div>
           <div>
-            <label htmlFor="notes" className="mb-1 block text-xs font-medium text-stone-600">
+            <label htmlFor="notes" className="mb-1 block text-xs font-bold uppercase tracking-wide text-night/60">
               Notes
             </label>
             <textarea
@@ -293,12 +326,12 @@ export default function ContactsClient({
               placeholder="How you met, gift ideas, anything…"
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm font-medium text-red-700">{error}</p>}
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={saving}
-              className="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+              className="rounded-xl bg-night px-4 py-2.5 text-sm font-bold text-white transition hover:bg-night-shadow disabled:opacity-50"
             >
               {saving
                 ? "Saving…"
@@ -310,7 +343,7 @@ export default function ContactsClient({
               <button
                 type="button"
                 onClick={cancelEdit}
-                className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100"
+                className="rounded-xl border border-night/20 px-4 py-2.5 text-sm font-bold text-night/70 hover:bg-sand/20"
               >
                 Cancel
               </button>
@@ -319,57 +352,68 @@ export default function ContactsClient({
         </form>
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold text-stone-700">
-          Upcoming birthdays
-        </h2>
-        {contacts.length === 0 ? (
-          <p className="mt-3 text-sm text-stone-500">
-            No contacts yet — add someone above.
+      <section className="rounded-2xl border border-night/10 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.14em] text-sand-shadow">Your circle</p>
+            <h2 className="mt-1 text-xl font-bold text-night">All contacts</h2>
+          </div>
+          <p className="text-sm text-night/60">{visibleContacts.length} of {contacts.length} people</p>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_11rem]">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} className={inputClass} placeholder="Search names, notes, or birthdays" aria-label="Search contacts" />
+          <select value={sort} onChange={(event) => setSort(event.target.value as SortOption)} className={inputClass} aria-label="Sort contacts">
+            <option value="upcoming">Soonest birthday</option>
+            <option value="name">Name A-Z</option>
+            <option value="birthday">Calendar date</option>
+          </select>
+        </div>
+        {visibleContacts.length === 0 ? (
+          <p className="mt-8 rounded-xl bg-[#f8f2e9] p-5 text-center text-sm text-night/65">
+            {contacts.length === 0 ? "No contacts yet. Add someone above." : "No contacts match that search."}
           </p>
         ) : (
-          <ul className="mt-3 divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white shadow-sm">
-            {contacts.map((c) => (
-              <li key={c.id} className="flex items-start gap-3 p-4">
+          <ul className="mt-5 divide-y divide-night/10 overflow-hidden rounded-xl border border-night/10">
+            {visibleContacts.map((c) => (
+              <li key={c.id} className="flex flex-col gap-3 p-4 transition hover:bg-sand/10 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="font-medium">{c.name}</span>
-                    <span className="text-sm text-stone-500">
+                    <span className="font-bold text-night">{c.name}</span>
+                    <span className="text-sm text-night/60">
                       {birthdayLabel(c)}
                     </span>
                   </div>
                   {c.notes && (
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-stone-600">
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-night/70">
                       {c.notes}
                     </p>
                   )}
                 </div>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                <div className="flex items-center justify-between gap-2 sm:contents">
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
                     c.days_until === 0
-                      ? "bg-amber-100 text-amber-800"
+                      ? "bg-sand text-night"
                       : c.days_until <= 30
-                        ? "bg-stone-100 text-stone-700"
-                        : "bg-stone-50 text-stone-500"
-                  }`}
-                >
-                  {untilLabel(c.days_until)}
-                </span>
-                <div className="flex shrink-0 gap-1">
+                        ? "bg-night/10 text-night"
+                        : "bg-[#f8f2e9] text-night/65"}`}>
+                    {untilLabel(c.days_until)}
+                  </span>
+                  <div className="flex shrink-0 gap-1">
                   <button
                     type="button"
                     onClick={() => startEdit(c)}
-                    className="rounded px-2 py-1 text-xs font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-night/65 hover:bg-sand/30 hover:text-night"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(c)}
-                    className="rounded px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50"
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50"
                   >
                     Delete
                   </button>
+                  </div>
                 </div>
               </li>
             ))}

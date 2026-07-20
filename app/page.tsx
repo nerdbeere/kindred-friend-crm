@@ -12,19 +12,12 @@ export default function Home() {
   const feedPath = `/api/feed/${getFeedToken()}.ics`;
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">Kindred</h1>
-        <a
-          href="/api-docs"
-          className="text-sm text-stone-500 hover:text-stone-800"
-        >
-          Agent API &rarr;
-        </a>
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className="max-w-2xl">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-sand-shadow">Your inner circle</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-night sm:text-4xl">People worth remembering.</h1>
+        <p className="mt-3 text-base leading-7 text-night/70">Keep birthdays, little details, and every important date close at hand.</p>
       </div>
-      <p className="mt-1 text-sm text-stone-500">
-        Your people, their birthdays, one calendar feed.
-      </p>
       <ContactsClient initialContacts={contacts} feedPath={feedPath} />
     </main>
   );
