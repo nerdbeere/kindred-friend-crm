@@ -17,6 +17,10 @@
 #   or bring your own key (non-interactive):
 #   DEPLOY_KEY=~/.ssh/kindred_deploy_key ./setup-lxc.sh git@github.com:you/kindred-friend-crm.git
 #
+# One-liner (the installer is mirrored to a public repo so the app repo
+# can stay private):
+#   curl -fsSL https://raw.githubusercontent.com/nerdbeere/kindred-friend-crm-install/main/setup-lxc.sh | bash
+#
 # What it does:
 #   1. Creates an unprivileged Debian 12 LXC (DHCP, starts on boot)
 #   2. Installs Node.js + build tools inside the container
@@ -41,7 +45,9 @@
 
 set -euo pipefail
 
-GIT_REPO="${1:-${GIT_REPO:-}}"
+# Default repo to deploy. Override by passing a URL as $1 or setting GIT_REPO.
+DEFAULT_GIT_REPO="git@github.com:nerdbeere/kindred-friend-crm.git"
+GIT_REPO="${1:-${GIT_REPO:-$DEFAULT_GIT_REPO}}"
 CT_ID="${CT_ID:-}"
 HOSTNAME="${HOSTNAME:-kindred}"
 CORES="${CORES:-1}"
@@ -170,7 +176,8 @@ KEY_BANNER
 
     until pct exec "$CT_ID" -- su -s /bin/bash kindred -c \
       "GIT_SSH_COMMAND='ssh -o BatchMode=yes' git ls-remote '$GIT_REPO' HEAD" >/dev/null 2>&1; do
-      read -r -p "Key not authorized yet. Press Enter to retry (Ctrl-C to abort)... "
+      # Read from /dev/tty so the one-liner `curl ... | bash` still works.
+      read -r -p "Key not authorized yet. Press Enter to retry (Ctrl-C to abort)... " </dev/tty || exit 1
     done
     log "Deploy key authorized."
   fi
