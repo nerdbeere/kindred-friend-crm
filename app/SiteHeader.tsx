@@ -8,7 +8,6 @@ import SpiritMark from "./SpiritMark";
 const links = [
   { href: "/", label: "Dashboard" },
   { href: "/contacts", label: "Contacts" },
-  { href: "/api-docs", label: "Agent API" },
   { href: "/admin", label: "Admin" },
 ];
 

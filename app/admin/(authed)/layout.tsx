@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 const TABS = [
   { href: "/admin/backups", label: "Backups" },
   { href: "/admin/settings", label: "Settings" },
+  { href: "/admin/developer", label: "Developer" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
