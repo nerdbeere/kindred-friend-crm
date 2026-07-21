@@ -320,10 +320,30 @@ export default function BackupsClient() {
 
   const lb = status.last_backup;
   const sorted = snapshots.slice().sort((a, b) => (b.time ?? "").localeCompare(a.time ?? ""));
+  const backupHealthy = lb?.status === "ok";
+  const backupState = !lb ? "No backup has run yet" : backupHealthy ? "Backups are healthy" : "Backup needs attention";
+  const backupDescription = !lb
+    ? "Run your first encrypted backup now."
+    : backupHealthy
+      ? `Last successful backup ${timeAgo(lb.ts)}. Next run: ${fmtTs(status.next_run)}.`
+      : lb.error || "Review the most recent backup result and retry when the issue is resolved.";
 
   return (
     <div className="mt-4 space-y-6">
-      {/* ---------------------------------------------------- status cards */}
+      <Card className={backupHealthy ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-night/55">Backup health</p>
+            <h2 className="mt-1 text-lg font-bold text-night">{backupState}</h2>
+            <p className="mt-1 text-sm text-night/65">{backupDescription}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" onClick={() => startSimpleJob("backup")} disabled={isActive(jobs.backup)}>{isActive(jobs.backup) ? "Backing up..." : "Back up now"}</Button>
+            <Button type="button" variant="secondary" onClick={() => startSimpleJob("check")} disabled={isActive(jobs.check)}>{isActive(jobs.check) ? "Checking..." : "Check integrity"}</Button>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="p-4">
           <h3 className="text-xs font-bold uppercase tracking-wide text-night/50">Repository</h3>
@@ -372,26 +392,9 @@ export default function BackupsClient() {
         </Card>
       </div>
 
-      {/* -------------------------------------------------------- actions */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" onClick={() => startSimpleJob("backup")} disabled={isActive(jobs.backup)}>
-          {isActive(jobs.backup) ? "Backing up…" : "Back up now"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => startSimpleJob("check")} disabled={isActive(jobs.check)}>
-          {isActive(jobs.check) ? "Checking…" : "Check integrity"}
-        </Button>
         <Button type="button" variant="secondary" onClick={() => void refresh()}>
           Refresh
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => setUnlockConfirm(true)}
-          disabled={isActive(jobs.backup) || isActive(jobs.check) || isActive(jobs.restore)}
-          className="border-amber-300 text-amber-800 hover:bg-amber-50"
-          title="Clear a stale repository lock left by a killed or interrupted job"
-        >
-          Unlock repository…
         </Button>
         {isRelevant(jobs.backup) && !isActive(jobs.backup) && <JobBadge job={jobs.backup} />}
         {isRelevant(jobs.check) && !isActive(jobs.check) && <JobBadge job={jobs.check} />}
@@ -403,9 +406,17 @@ export default function BackupsClient() {
           <button type="button" onClick={() => setUnlockConfirm(true)} className="underline">
             Unlock repository
           </button>{" "}
-          above, then retry.
+          in Advanced recovery below, then retry.
         </Alert>
       )}
+
+      <details className="rounded-2xl border border-night/10 bg-white p-5 shadow-sm">
+        <summary className="cursor-pointer text-sm font-bold text-night">Advanced recovery and repository details</summary>
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-night/60">
+          <span>Use repository unlock only after an interrupted operation leaves a stale lock.</span>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setUnlockConfirm(true)} disabled={isActive(jobs.backup) || isActive(jobs.check) || isActive(jobs.restore)} className="border-amber-300 text-amber-800 hover:bg-amber-50">Unlock repository...</Button>
+        </div>
+      </details>
 
       {message && <Alert tone="success">{message}</Alert>}
       {error && <Alert tone="danger">{error}</Alert>}

@@ -57,38 +57,42 @@ export default function EnableBackupsForm({ onEnabled }: { onEnabled: () => void
 
   return (
     <Card className="mt-4">
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-sand-shadow">Step 1 of 1</p>
+      <h2 className="mt-1 text-lg font-bold text-night">Connect encrypted storage</h2>
       <p className="text-sm text-night/65">
         Backups aren't configured yet. Point Kindred at an S3-compatible bucket — snapshots are
         encrypted client-side (AES-256 via restic) before they leave this container.
       </p>
+      <p className="mt-2 text-xs leading-5 text-night/50">Create a bucket and credentials with read, write, list, and delete access limited to this backup location. The first backup starts after setup succeeds.</p>
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="S3 endpoint (https://…)" className="sm:col-span-2">
-          <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} disabled={busy} placeholder="https://s3.eu-central-1.amazonaws.com" />
+        <Field label="S3 endpoint (https://...)" htmlFor="backup-endpoint" hint="For AWS: https://s3.<region>.amazonaws.com" className="sm:col-span-2">
+          <Input id="backup-endpoint" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} disabled={busy} placeholder="https://s3.eu-central-1.amazonaws.com" />
         </Field>
-        <Field label="Bucket">
-          <Input value={bucket} onChange={(e) => setBucket(e.target.value)} disabled={busy} placeholder="kindred-backups" />
+        <Field label="Bucket" htmlFor="backup-bucket">
+          <Input id="backup-bucket" value={bucket} onChange={(e) => setBucket(e.target.value)} disabled={busy} placeholder="kindred-backups" />
         </Field>
-        <Field label="Prefix (path inside bucket)">
-          <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} disabled={busy} />
+        <Field label="Folder inside bucket" htmlFor="backup-prefix">
+          <Input id="backup-prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} disabled={busy} />
         </Field>
-        <Field label="Region (optional)">
-          <Input value={region} onChange={(e) => setRegion(e.target.value)} disabled={busy} placeholder="eu-central-1" />
+        <Field label="Region (optional)" htmlFor="backup-region" hint="Usually required for AWS.">
+          <Input id="backup-region" value={region} onChange={(e) => setRegion(e.target.value)} disabled={busy} placeholder="eu-central-1" />
         </Field>
         <div className="hidden sm:block" />
-        <Field label="Access key ID">
-          <Input value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} disabled={busy} autoComplete="off" />
+        <Field label="Access key ID" htmlFor="backup-access-key">
+          <Input id="backup-access-key" value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} disabled={busy} autoComplete="off" />
         </Field>
-        <Field label="Secret access key">
-          <Input type="password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} disabled={busy} autoComplete="new-password" />
+        <Field label="Secret access key" htmlFor="backup-secret-key">
+          <Input id="backup-secret-key" type="password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} disabled={busy} autoComplete="new-password" />
         </Field>
         <div className="sm:col-span-2">
-          <label className="flex items-center gap-2 text-sm text-night/75">
-            <input type="checkbox" checked={generatePassword} onChange={(e) => setGeneratePassword(e.target.checked)} disabled={busy} />
+          <label htmlFor="generate-restic-password" className="flex items-center gap-2 text-sm text-night/75">
+            <input id="generate-restic-password" type="checkbox" checked={generatePassword} onChange={(e) => setGeneratePassword(e.target.checked)} disabled={busy} />
             Generate a restic repository password for me (stored in <code>/etc/kindred/restic.pass</code>)
           </label>
           {!generatePassword && (
             <Input
               className="mt-2"
+              id="restic-password"
               type="password"
               value={resticPassword}
               onChange={(e) => setResticPassword(e.target.value)}

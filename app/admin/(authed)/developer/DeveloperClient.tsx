@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, Card, PageHeader } from "@/app/components/ui";
+import Link from "next/link";
+import { Card, PageHeader } from "@/app/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 
 function CopyButton({ text }: { text: string }) {
@@ -37,7 +38,7 @@ function CodeBlock({ code }: { code: string }) {
   );
 }
 
-export default function DeveloperClient({ token }: { token: string }) {
+export default function DeveloperClient() {
   const [origin, setOrigin] = useState("http://<your-host>:3000");
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function DeveloperClient({ token }: { token: string }) {
       "args": ["/absolute/path/to/kindred-mcp/dist/index.js"],
       "env": {
         "KINDRED_URL": "${origin}",
-        "KINDRED_TOKEN": "${token}"
+        "KINDRED_TOKEN": "<copy from Administration > Access>"
       }
     }
   }
@@ -66,10 +67,6 @@ export default function DeveloperClient({ token }: { token: string }) {
       />
 
       <div className="mt-6 space-y-6">
-        <Alert>
-          <strong>Keep this token private.</strong> It grants read and write access to your contacts and is also used by the birthday calendar feed.
-        </Alert>
-
         <Card>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-sand-shadow">Step 1</p>
           <h2 className="mt-1 text-lg font-bold text-night">Build the MCP server</h2>
@@ -90,10 +87,7 @@ export default function DeveloperClient({ token }: { token: string }) {
           <p className="mt-2 text-sm text-night/60">
             Add this value as <code>KINDRED_TOKEN</code> in your MCP client configuration. Use the URL shown in the next step as <code>KINDRED_URL</code>.
           </p>
-          <div className="mt-3 flex items-center gap-2">
-            <code className="flex-1 truncate rounded-md bg-paper px-2 py-1.5 text-xs text-night ring-1 ring-night/10">{token}</code>
-            <CopyButton text={token} />
-          </div>
+          <Link href="/admin/access" className="mt-3 inline-flex rounded-lg bg-night px-3 py-2 text-sm font-semibold text-white hover:bg-night-shadow">Open Access</Link>
           <p className="mt-3 text-xs text-night/50">
             If your AI client runs on another machine, use a LAN address or HTTPS URL, not <code>localhost</code>.
           </p>
@@ -103,7 +97,7 @@ export default function DeveloperClient({ token }: { token: string }) {
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-sand-shadow">Step 3</p>
           <h2 className="mt-1 text-lg font-bold text-night">Add Kindred to your MCP client</h2>
           <p className="mt-2 text-sm text-night/60">
-            Add this entry to the client&apos;s MCP configuration. Claude Desktop, Cursor, and similar clients use this shape. Replace the path with the absolute path to the built server.
+            Add this entry to the client&apos;s MCP configuration. Claude Desktop, Cursor, and similar clients use this shape. Replace the server path and the token placeholder with the value you copied in the previous step.
           </p>
           <div className="mt-3">
             <CodeBlock code={config} />
@@ -135,6 +129,23 @@ export default function DeveloperClient({ token }: { token: string }) {
           <p className="mt-3 text-xs text-night/50">
             The server uses Kindred&apos;s authenticated agent API over HTTP. It never opens the Kindred database directly.
           </p>
+        </Card>
+
+        <Card>
+          <h2 className="text-lg font-bold text-night">Agent API reference</h2>
+          <p className="mt-2 text-sm text-night/60">The MCP server uses Kindred&apos;s Bearer-token authenticated API. Use the token from Access as the <code>Authorization: Bearer &lt;token&gt;</code> header.</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead><tr className="border-b border-night/10 text-night/50"><th className="pb-2 font-semibold">Method</th><th className="pb-2 font-semibold">Endpoint</th><th className="pb-2 font-semibold">Purpose</th></tr></thead>
+              <tbody className="divide-y divide-night/10 text-night/70">
+                <tr><td className="py-2 font-mono">GET</td><td className="py-2 font-mono">/api/agent/contacts</td><td className="py-2">List, search, or filter upcoming birthdays.</td></tr>
+                <tr><td className="py-2 font-mono">GET</td><td className="py-2 font-mono">/api/agent/contacts/:id</td><td className="py-2">Fetch one contact.</td></tr>
+                <tr><td className="py-2 font-mono">POST</td><td className="py-2 font-mono">/api/agent/contacts</td><td className="py-2">Create a contact.</td></tr>
+                <tr><td className="py-2 font-mono">PUT / DELETE</td><td className="py-2 font-mono">/api/agent/contacts/:id</td><td className="py-2">Update or permanently delete a contact.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-night/50">List requests accept optional <code>q</code> and <code>within_days</code> query parameters. Create and update requests use JSON contact fields.</p>
         </Card>
 
         <Card>

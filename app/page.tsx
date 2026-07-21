@@ -78,10 +78,13 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      <div className="mt-4 flex items-center justify-between gap-3 px-1 text-xs text-night/45">
-        <span>Subscribe to birthdays from Home Assistant, Google Calendar, or any calendar app.</span>
+      <Card className="mt-6 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-bold text-night">Keep birthdays in your calendar</p>
+          <p className="mt-1 text-xs text-night/55">Subscribe from Home Assistant, Google Calendar, or any calendar app.</p>
+        </div>
         <CopyFeedUrlButton feedPath={feedPath} />
-      </div>
+      </Card>
     </main>
   );
 }

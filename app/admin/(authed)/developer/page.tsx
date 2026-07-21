@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getFeedToken, isAdminConfigured } from "@/lib/db";
+import { isAdminConfigured } from "@/lib/db";
 import DeveloperClient from "./DeveloperClient";
 
 export const dynamic = "force-dynamic";
@@ -11,5 +11,5 @@ export const metadata = {
 
 export default function DeveloperPage() {
   if (!isAdminConfigured()) redirect("/setup");
-  return <DeveloperClient token={getFeedToken()} />;
+  return <DeveloperClient />;
 }

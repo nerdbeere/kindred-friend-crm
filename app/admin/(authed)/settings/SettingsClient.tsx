@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Alert, Button, Field, Input } from "@/app/components/ui";
 
-export default function SettingsClient() {
+export default function SettingsClient({ className = "" }: { className?: string }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -44,7 +44,7 @@ export default function SettingsClient() {
   }
 
   return (
-    <form onSubmit={submit} className="mt-4 max-w-md space-y-4 rounded-2xl border border-night/10 bg-white p-5 shadow-sm">
+    <form onSubmit={submit} className={`space-y-4 rounded-2xl border border-night/10 bg-white p-5 shadow-sm ${className}`}>
       <Field label="Current password" htmlFor="current">
         <Input
           id="current"
@@ -66,7 +66,7 @@ export default function SettingsClient() {
           required
         />
       </Field>
-      <Field label="Confirm new password" htmlFor="confirm">
+      <Field label="Confirm new password" htmlFor="confirm" hint={confirm && next !== confirm ? "Passwords do not match yet." : undefined}>
         <Input
           id="confirm"
           type="password"

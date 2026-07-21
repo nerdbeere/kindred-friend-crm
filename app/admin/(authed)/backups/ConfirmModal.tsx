@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/app/components/ui";
 
 /**
@@ -25,14 +25,31 @@ export default function ConfirmModal({
   onCancel: () => void;
 }) {
   const [typed, setTyped] = useState("");
+  const titleId = useId();
+  const inputId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const busyRef = useRef(busy);
 
   useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  useEffect(() => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !busy) onCancel();
+      if (e.key === "Escape" && !busyRef.current) onCancel();
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])");
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onCancel]);
+    return () => { window.removeEventListener("keydown", onKey); returnFocusRef.current?.focus(); };
+  }, [onCancel]);
 
   return (
     <div
@@ -40,18 +57,21 @@ export default function ConfirmModal({
       onClick={() => !busy && onCancel()}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
     >
       <div
         className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-bold text-night">{title}</h3>
+        <h3 id={titleId} className="text-base font-bold text-night">{title}</h3>
         <div className="mt-2 text-sm text-night/65">{children}</div>
-        <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-night/50">
+        <label htmlFor={inputId} className="mt-4 block text-xs font-bold uppercase tracking-wide text-night/50">
           Type <span className="font-mono font-bold text-night">{phrase}</span> to confirm
         </label>
         <input
           type="text"
+          id={inputId}
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           disabled={busy}
