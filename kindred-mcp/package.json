@@ -1,0 +1,34 @@
+{
+  "name": "kindred-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP (Model Context Protocol) server for Kindred, a self-hosted friend/relationship CRM",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "kindred-mcp": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.0.0"
+  }
+}

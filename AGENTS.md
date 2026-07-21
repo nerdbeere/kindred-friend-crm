@@ -46,6 +46,8 @@ skills/kindred/ agent skill (SKILL.md) teaching AI to use the API
 scripts/        node helpers + in-container shell scripts
 proxmox/        LXC provision/update scripts
 docs/           design docs (e.g. BACKUPS.md)
+kindred-mcp/    standalone MCP server wrapping the agent API (own package.json,
+                tsconfig, tests; separate build/test lifecycle from the app)
 ```
 
 ## Commands
@@ -55,6 +57,9 @@ docs/           design docs (e.g. BACKUPS.md)
 - `npm run print:feed-token` — print the API/feed token
 - Test API changes with curl against a throwaway DB:
   `DATABASE_PATH=/tmp/kindred-test.db PORT=3100 npm start`
+
+For the `kindred-mcp/` package (separate lifecycle):
+`cd kindred-mcp && npm install && npm run build && npm test`
 
 ## Conventions
 
